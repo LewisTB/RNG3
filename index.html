@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Conditional pinwheel randomiser</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+          sans-serif;
+        background-color: #f5f5f5;
+        color: #222222;
+      }
+
+      #root {
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+      }
+
+      .app {
+        max-width: 960px;
+        width: 100%;
+        margin: 2rem;
+        background-color: #ffffff;
+        border-radius: 12px;
+        padding: 2rem 2.5rem;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
+      }
+
+      header {
+        margin-bottom: 1.5rem;
+      }
+
+      header h1 {
+        margin: 0 0 0.5rem 0;
+        font-size: 1.8rem;
+      }
+
+      header p {
+        margin: 0;
+        font-size: 0.95rem;
+        color: #555555;
+      }
+
+      .step {
+        margin-top: 1rem;
+      }
+
+      .step h2 {
+        margin-bottom: 1rem;
+      }
+
+      .button-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+
+      .choice-button,
+      .primary-button {
+        border: none;
+        border-radius: 8px;
+        padding: 0.75rem 1.25rem;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        color: #ffffff;
+        transition: transform 0.1s ease, box-shadow 0.1s ease,
+          opacity 0.1s ease;
+      }
+
+      .choice-button {
+        min-width: 80px;
+        text-align: center;
+      }
+
+      .primary-button {
+        background-color: #1976d2;
+        margin-top: 1rem;
+      }
+
+      .choice-button:hover,
+      .primary-button:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.1);
+      }
+
+      .primary-button:disabled {
+        opacity: 0.6;
+        cursor: default;
+        box-shadow: none;
+      }
+
+      .wheel {
+        margin-top: 1rem;
+        padding: 1rem 1.25rem;
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+        background-color: #fafafa;
+      }
+
+      .wheel-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 0.75rem;
+      }
+
+      .wheel-table th,
+      .wheel-table td {
+        border: 1px solid #e0e0e0;
+        padding: 0.35rem 0.5rem;
+        text-align: left;
+      }
+
+      .wheel-table input[type="text"],
+      .wheel-table input[type="number"] {
+        width: 100%;
+        padding: 0.25rem 0.35rem;
+        font-size: 0.9rem;
+      }
+
+      .wheel-result {
+        margin-top: 0.5rem;
+        font-size: 0.95rem;
+      }
+
+      .two-column {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1.5rem;
+        align-items: flex-start;
+      }
+
+      .multi-picker {
+        margin-top: 1rem;
+        padding: 1rem 1.25rem;
+        border-radius: 10px;
+        border: 1px solid #e0e0e0;
+        background-color: #fafafa;
+      }
+
+      .multi-picker h3 {
+        margin-top: 0;
+      }
+
+      .option-list {
+        list-style: none;
+        padding-left: 0;
+        margin: 0.5rem 0 0.75rem 0;
+      }
+
+      .option-list li {
+        margin-bottom: 0.25rem;
+      }
+
+      .picker-result {
+        margin-top: 0.5rem;
+        font-size: 0.95rem;
+      }
+
+      .summary {
+        margin-top: 1rem;
+      }
+
+      .summary section {
+        margin-bottom: 1.25rem;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid #e0e0e0;
+      }
+
+      .summary h3 {
+        margin-bottom: 0.5rem;
+      }
+
+      .summary dl {
+        margin: 0;
+      }
+
+      .summary dt {
+        font-weight: 600;
+      }
+
+      .summary dd {
+        margin: 0 0 0.25rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <!-- React + ReactDOM from CDNs -->
+    <script
+      src="https://unpkg.com/react@18/umd/react.development.js"
+      crossorigin
+    ></script>
+    <script
+      src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"
+      crossorigin
+    ></script>
+    <!-- Babel so we can write JSX directly in the browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+      const { useState } = React;
+
+      // ----- Core configuration data -----
+
+      const DEFAULT_WHEEL_CONFIGS = {
+        P_S_WHEEL: {
+          id: "P_S_WHEEL",
+          name: "P branch: S wheel",
+          segments: [
+            { id: "P_S_JB", label: "JB", weight: 1 },
+            { id: "P_S_NHJ", label: "NHJ", weight: 1 },
+            { id: "P_S_TW", label: "TW", weight: 1 },
+            { id: "P_S_FL", label: "FL", weight: 1 },
+          ],
+        },
+        P_D_WHEEL: {
+          id: "P_D_WHEEL",
+          name: "P branch: D wheel",
+          segments: [
+            { id: "P_D_OIL_HE", label: "Oil+HE", weight: 40 },
+            { id: "P_D_NO_OIL_FP", label: "No oil FP", weight: 60 },
+          ],
+        },
+        FS_FS1_WHEEL: {
+          id: "FS_FS1_WHEEL",
+          name: "FS: initial wheel",
+          segments: [
+            { id: "FS1_SHIB", label: "Shib", weight: 10 },
+            { id: "FS1_OUTFIT_DELAY", label: "outfit+delay", weight: 10 },
+            { id: "FS1_OIL", label: "Oil", weight: 10 },
+            { id: "FS1_TRAD", label: "Trad", weight: 70 },
+          ],
+        },
+        FS_SHIB_WHEEL: {
+          id: "FS_SHIB_WHEEL",
+          name: "FS: Shib sub-wheel",
+          segments: [
+            { id: "FS2_CORSET", label: "Corset", weight: 1 },
+            { id: "FS2_RESTRAINED", label: "Restrained", weight: 1 },
+          ],
+        },
+        FS_CORSET_WHEEL: {
+          id: "FS_CORSET_WHEEL",
+          name: "FS: Corset follow-up wheel",
+          segments: [
+            { id: "FS2_SENSE_DEP", label: "Sense-dep", weight: 40 },
+            { id: "FS2_BSC", label: "BSC", weight: 60 },
+          ],
+        },
+        FS_FF_BSC_WHEEL: {
+          id: "FS_FF_BSC_WHEEL",
+          name: "FS: F-F / BSC wheel",
+          segments: [
+            { id: "FS_FF", label: "F-F", weight: 1 },
+            { id: "FS_BSC", label: "BSC", weight: 1 },
+          ],
+        },
+        FS_LOCATION_WHEEL: {
+          id: "FS_LOCATION_WHEEL",
+          name: "Location",
+          segments: [
+            { id: "LOC_BEDROOM", label: "Bedroom", weight: 75 },
+            { id: "LOC_OFFICE", label: "Office", weight: 20 },
+            { id: "LOC_LIVING_ROOM", label: "Living room", weight: 5 },
+          ],
+        },
+        FS_ACCESSORIES_YN_WHEEL: {
+          id: "FS_ACCESSORIES_YN_WHEEL",
+          name: "Accessories?",
+          segments: [
+            { id: "ACCESSORIES_YES", label: "Yes", weight: 1 },
+            { id: "ACCESSORIES_NO", label: "No", weight: 1 },
+          ],
+        },
+      };
+
+      const BUTTON_CONFIGS = {
+        CHOICE1: [
+          { id: "P", label: "P", colour: "#1976d2" },
+          { id: "FS", label: "FS", colour: "#9c27b0" },
+        ],
+        P_SUB_CHOICE: [
+          { id: "S", label: "S", colour: "#4caf50" },
+          { id: "D", label: "D", colour: "#f57c00" },
+        ],
+        FS_TRAD_CL_CHOICE: [
+          { id: "CL", label: "CL", colour: "#00796b" },
+          { id: "NO_CL", label: "No CL", colour: "#795548" },
+        ],
+      };
+
+      const FP_OPTIONS = [
+        { id: "CL_TRAD", label: "CL:trad", group: "CL" },
+        { id: "CL_96", label: "CL-96", group: "CL" },
+        { id: "CL_FS", label: "CL:FS", group: "CL" },
+        { id: "JB_SIDE", label: "JB:side", group: "JB" },
+        { id: "JB_UP", label: "JB:up", group: "JB" },
+        { id: "JB_STAND", label: "JB:stand", group: "JB" },
+        { id: "JB_EDGE", label: "JB:edge", group: "JB" },
+        { id: "JB_ON", label: "JB:on", group: "JB" },
+        { id: "TW", label: "TW", group: "OTHER" },
+        { id: "NHJ", label: "NHJ", group: "OTHER" },
+      ];
+
+      const ACCESSORY_OPTIONS = ["9mm", "bb8", "Ag", "clear"];
+
+      // ----- Components -----
+
+      function Wheel({
+        config,
+        disabled,
+        onConfigChange,
+        onSpinComplete,
+        spinButtonLabel,
+      }) {
+        const [lastResult, setLastResult] = useState(null);
+
+        const handleLabelChange = (index, newLabel) => {
+          const updated = config.segments.map((seg, i) =>
+            i === index ? { ...seg, label: newLabel } : seg
+          );
+          onConfigChange(updated);
+        };
+
+        const handleWeightChange = (index, newWeightStr) => {
+          const parsed = Number(newWeightStr);
+          const safeWeight =
+            Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+          const updated = config.segments.map((seg, i) =>
+            i === index ? { ...seg, weight: safeWeight } : seg
+          );
+          onConfigChange(updated);
+        };
+
+        const handleSpin = () => {
+          if (disabled) return;
+          const segments = config.segments;
+          if (!segments.length) return;
+
+          const positive = segments.filter((s) => s.weight > 0);
+          const used =
+            positive.length > 0
+              ? positive
+              : segments.map((s) => ({ ...s, weight: 1 }));
+
+          const totalWeight = used.reduce(
+            (sum, seg) => sum + seg.weight,
+            0
+          );
+          let r = Math.random() * totalWeight;
+          let chosen = used[used.length - 1];
+          for (const seg of used) {
+            if (r < seg.weight) {
+              chosen = seg;
+              break;
+            }
+            r -= seg.weight;
+          }
+
+          setLastResult(chosen);
+          const original =
+            segments.find((s) => s.id === chosen.id) || chosen;
+          onSpinComplete(original);
+        };
+
+        return (
+          <div className="wheel">
+            <h3>{config.name}</h3>
+            <table className="wheel-table">
+              <thead>
+                <tr>
+                  <th>Label</th>
+                  <th>Weight</th>
+                </tr>
+              </thead>
+              <tbody>
+                {config.segments.map((seg, index) => (
+                  <tr key={seg.id}>
+                    <td>
+                      <input
+                        type="text"
+                        value={seg.label}
+                        onChange={(e) =>
+                          handleLabelChange(index, e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={seg.weight}
+                        onChange={(e) =>
+                          handleWeightChange(index, e.target.value)
+                        }
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <button
+              className="primary-button"
+              onClick={handleSpin}
+              disabled={disabled}
+            >
+              {spinButtonLabel || "Spin wheel"}
+            </button>
+            {lastResult && (
+              <p className="wheel-result">
+                Result: <strong>{lastResult.label}</strong>
+              </p>
+            )}
+          </div>
+        );
+      }
+
+      function FPSelector({ fsHasCL, onResolved }) {
+        const [selectedIds, setSelectedIds] = useState([]);
+        const [result, setResult] = useState(null);
+
+        const availableOptions = FP_OPTIONS.filter(
+          (opt) => fsHasCL || opt.group !== "CL"
+        );
+
+        const toggleOption = (option) => {
+          setSelectedIds((current) => {
+            const isSelected = current.includes(option.id);
+            if (isSelected) {
+              return current.filter((id) => id !== option.id);
+            }
+
+            let next = [...current];
+
+            if (option.group === "CL") {
+              next = next.filter((id) => {
+                const opt = FP_OPTIONS.find((o) => o.id === id);
+                return opt && opt.group !== "CL";
+              });
+              next.push(option.id);
+              if (option.id === "CL_96") {
+                next = next.filter((id) => {
+                  const opt = FP_OPTIONS.find((o) => o.id === id);
+                  return opt && opt.group !== "JB";
+                });
+              }
+              return next;
+            }
+
+            if (option.group === "JB") {
+              if (current.includes("CL_96")) {
+                return current;
+              }
+              next = next.filter((id) => {
+                const opt = FP_OPTIONS.find((o) => o.id === id);
+                return opt && opt.group !== "JB";
+              });
+              next.push(option.id);
+              return next;
+            }
+
+            next.push(option.id);
+            return next;
+          });
+        };
+
+        const handleRunRandomiser = () => {
+          const initiallySelected = FP_OPTIONS.filter((opt) =>
+            selectedIds.includes(opt.id)
+          );
+
+          const clSelected = initiallySelected.filter(
+            (opt) => opt.group === "CL"
+          );
+          const jbSelected = initiallySelected.filter(
+            (opt) => opt.group === "JB"
+          );
+          const otherSelected = initiallySelected.filter(
+            (opt) => opt.group === "OTHER"
+          );
+
+          const retained = [];
+
+          if (clSelected.length > 0 && Math.random() < 0.5) {
+            retained.push(clSelected[0]);
+          }
+
+          if (jbSelected.length > 0 && Math.random() < 0.5) {
+            retained.push(jbSelected[0]);
+          }
+
+          retained.push(...otherSelected);
+
+          const resultValue = {
+            initialSelected: initiallySelected.map((o) => o.label),
+            retained: retained.map((o) => o.label),
+          };
+
+          setResult(resultValue);
+          onResolved(resultValue);
+        };
+
+        return (
+          <div className="multi-picker">
+            <h3>FP multi-picker</h3>
+            <p>
+              You can pick at most one CL option and at most one JB
+              option. If CL-96 is chosen, no JB options are allowed.
+            </p>
+            <ul className="option-list">
+              {availableOptions.map((option) => (
+                <li key={option.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(option.id)}
+                      onChange={() => toggleOption(option)}
+                    />
+                    {option.label}
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <button
+              className="primary-button"
+              onClick={handleRunRandomiser}
+            >
+              Run FP randomiser
+            </button>
+            {result && (
+              <div className="picker-result">
+                <p>
+                  Selected:{" "}
+                  {result.initialSelected.length > 0
+                    ? result.initialSelected.join(", ")
+                    : "None"}
+                </p>
+                <p>
+                  Retained after 50/50:{" "}
+                  {result.retained.length > 0
+                    ? result.retained.join(", ")
+                    : "None"}
+                </p>
+              </div>
+            )}
+          </div>
+        );
+      }
+
+      function AccessoriesPicker({ onPicked }) {
+        const [chosen, setChosen] = useState(null);
+
+        const handlePick = () => {
+          const numberToPick = Math.random() < 0.5 ? 1 : 2;
+          const pool = [...ACCESSORY_OPTIONS];
+          const picked = [];
+
+          for (let i = 0; i < numberToPick; i += 1) {
+            const index = Math.floor(Math.random() * pool.length);
+            picked.push(pool[index]);
+            pool.splice(index, 1);
+          }
+
+          setChosen(picked);
+          onPicked(picked);
+        };
+
+        return (
+          <div className="multi-picker">
+            <h3>Accessories</h3>
+            <p>The tool will randomly pick one or two accessories.</p>
+            <button className="primary-button" onClick={handlePick}>
+              Pick accessories
+            </button>
+            <ul className="option-list">
+              {ACCESSORY_OPTIONS.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            {chosen && (
+              <p className="picker-result">
+                Selected accessories:{" "}
+                <strong>{chosen.join(", ")}</strong>
+              </p>
+            )}
+          </div>
+        );
+      }
+
+      function Summary({
+        path,
+        buttons,
+        wheels,
+        fpSelections,
+        ffOutcome,
+        locationOutcome,
+        accessoriesWheelOutcome,
+        accessoriesChosen,
+        onRestart,
+      }) {
+        return (
+          <div className="summary">
+            <h2>Summary</h2>
+            <section>
+              <h3>Path taken</h3>
+              <p>{path || "Not set"}</p>
+            </section>
+
+            <section>
+              <h3>Buttons pressed</h3>
+              {buttons.length === 0 ? (
+                <p>None</p>
+              ) : (
+                <ul>
+                  {buttons.map((b, index) => (
+                    <li key={b.step + "-" + index}>
+                      <strong>{b.step}:</strong> {b.label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section>
+              <h3>Wheel outcomes</h3>
+              {wheels.length === 0 ? (
+                <p>None</p>
+              ) : (
+                <ul>
+                  {wheels.map((w, index) => (
+                    <li key={w.wheelId + "-" + index}>
+                      <strong>{w.wheelName}:</strong> {w.outcomeLabel}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            {path === "FS" && (
+              <>
+                <section>
+                  <h3>FP selections</h3>
+                  {fpSelections ? (
+                    <dl>
+                      <dt>Initially selected</dt>
+                      <dd>
+                        {fpSelections.initialSelected.length > 0
+                          ? fpSelections.initialSelected.join(", ")
+                          : "None"}
+                      </dd>
+                      <dt>Retained after 50/50</dt>
+                      <dd>
+                        {fpSelections.retained.length > 0
+                          ? fpSelections.retained.join(", ")
+                          : "None"}
+                      </dd>
+                    </dl>
+                  ) : (
+                    <p>No FP selections.</p>
+                  )}
+                </section>
+
+                <section>
+                  <h3>F-F / BSC outcome</h3>
+                  <p>{ffOutcome || "Not set"}</p>
+                </section>
+
+                <section>
+                  <h3>Location</h3>
+                  <p>{locationOutcome || "Not set"}</p>
+                </section>
+
+                <section>
+                  <h3>Accessories</h3>
+                  <dl>
+                    <dt>Accessories wheel</dt>
+                    <dd>{accessoriesWheelOutcome || "Not set"}</dd>
+                    <dt>Chosen accessories</dt>
+                    <dd>
+                      {accessoriesChosen && accessoriesChosen.length > 0
+                        ? accessoriesChosen.join(", ")
+                        : "None"}
+                    </dd>
+                  </dl>
+                </section>
+              </>
+            )}
+
+            <button className="primary-button" onClick={onRestart}>
+              Start again
+            </button>
+          </div>
+        );
+      }
+
+      // ----- Main app -----
+
+      function App() {
+        const [currentStep, setCurrentStep] = useState("CHOICE1");
+        const [path, setPath] = useState(null);
+
+        const [wheelConfigs, setWheelConfigs] = useState(
+          JSON.parse(JSON.stringify(DEFAULT_WHEEL_CONFIGS))
+        );
+
+        const [buttons, setButtons] = useState([]);
+        const [wheels, setWheels] = useState([]);
+
+        const [fsHasCL, setFsHasCL] = useState(true);
+        const [fpSelections, setFpSelections] = useState(null);
+        const [fpResolved, setFpResolved] = useState(false);
+        const [ffOutcome, setFfOutcome] = useState(null);
+        const [ffResolved, setFfResolved] = useState(false);
+
+        const [locationOutcome, setLocationOutcome] = useState(null);
+        const [locationResolved, setLocationResolved] = useState(false);
+
+        const [accessoriesWheelOutcome, setAccessoriesWheelOutcome] =
+          useState(null);
+        const [accessoriesWheelResolved, setAccessoriesWheelResolved] =
+          useState(false);
+        const [accessoriesNeeded, setAccessoriesNeeded] =
+          useState(false);
+        const [accessoriesChosen, setAccessoriesChosen] =
+          useState(null);
+
+        const updateWheelSegments = (wheelId, segments) => {
+          setWheelConfigs((prev) => ({
+            ...prev,
+            [wheelId]: {
+              ...prev[wheelId],
+              segments,
+            },
+          }));
+        };
+
+        const recordButton = (step, label) => {
+          setButtons((prev) => [...prev, { step, label }]);
+        };
+
+        const recordWheelOutcome = (wheelId, segment) => {
+          const wheelName =
+            (wheelConfigs[wheelId] && wheelConfigs[wheelId].name) ||
+            wheelId;
+          setWheels((prev) => [
+            ...prev,
+            {
+              wheelId,
+              wheelName,
+              outcomeId: segment.id,
+              outcomeLabel: segment.label,
+            },
+          ]);
+        };
+
+        const handleRestart = () => {
+          setCurrentStep("CHOICE1");
+          setPath(null);
+          setWheelConfigs(
+            JSON.parse(JSON.stringify(DEFAULT_WHEEL_CONFIGS))
+          );
+          setButtons([]);
+          setWheels([]);
+          setFsHasCL(true);
+          setFpSelections(null);
+          setFpResolved(false);
+          setFfOutcome(null);
+          setFfResolved(false);
+          setLocationOutcome(null);
+          setLocationResolved(false);
+          setAccessoriesWheelOutcome(null);
+          setAccessoriesWheelResolved(false);
+          setAccessoriesNeeded(false);
+          setAccessoriesChosen(null);
+        };
+
+        const handleInitialChoice = (choiceId) => {
+          recordButton("Initial choice", choiceId);
+          setPath(choiceId);
+          if (choiceId === "P") {
+            setCurrentStep("P_SUB_CHOICE");
+          } else {
+            setCurrentStep("FS_FS1_WHEEL");
+          }
+        };
+
+        const handlePSubChoice = (choiceId) => {
+          recordButton("P branch: S or D", choiceId);
+          if (choiceId === "S") {
+            setCurrentStep("P_S_WHEEL");
+          } else {
+            setCurrentStep("P_D_WHEEL");
+          }
+        };
+
+        const handleFsTradChoice = (choiceId) => {
+          recordButton(
+            "FS Trad: CL vs No CL",
+            choiceId === "CL" ? "CL" : "No CL"
+          );
+          setFsHasCL(choiceId === "CL");
+          setCurrentStep("FS_FP_AND_FF_BSC");
+        };
+
+        const readyForFsTerminus = fpResolved && ffResolved;
+        const readyForSummary =
+          locationResolved &&
+          accessoriesWheelResolved &&
+          (!accessoriesNeeded || accessoriesChosen !== null);
+
+        const renderStep = () => {
+          switch (currentStep) {
+            case "CHOICE1": {
+              const options = BUTTON_CONFIGS.CHOICE1;
+              return (
+                <div className="step">
+                  <h2>Step 1: Pick P or FS</h2>
+                  <div className="button-row">
+                    {options.map((btn) => (
+                      <button
+                        key={btn.id}
+                        className="choice-button"
+                        style={{ backgroundColor: btn.colour }}
+                        onClick={() =>
+                          handleInitialChoice(btn.id)
+                        }
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            case "P_SUB_CHOICE": {
+              const options = BUTTON_CONFIGS.P_SUB_CHOICE;
+              return (
+                <div className="step">
+                  <h2>P branch: S or D</h2>
+                  <div className="button-row">
+                    {options.map((btn) => (
+                      <button
+                        key={btn.id}
+                        className="choice-button"
+                        style={{ backgroundColor: btn.colour }}
+                        onClick={() => handlePSubChoice(btn.id)}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            case "P_S_WHEEL":
+              return (
+                <div className="step">
+                  <h2>P branch: S wheel</h2>
+                  <Wheel
+                    config={wheelConfigs.P_S_WHEEL}
+                    onConfigChange={(segments) =>
+                      updateWheelSegments("P_S_WHEEL", segments)
+                    }
+                    onSpinComplete={(segment) => {
+                      recordWheelOutcome("P_S_WHEEL", segment);
+                      setCurrentStep("SUMMARY");
+                    }}
+                  />
+                </div>
+              );
+            case "P_D_WHEEL":
+              return (
+                <div className="step">
+                  <h2>P branch: D wheel</h2>
+                  <Wheel
+                    config={wheelConfigs.P_D_WHEEL}
+                    onConfigChange={(segments) =>
+                      updateWheelSegments("P_D_WHEEL", segments)
+                    }
+                    onSpinComplete={(segment) => {
+                      recordWheelOutcome("P_D_WHEEL", segment);
+                      setCurrentStep("SUMMARY");
+                    }}
+                  />
+                </div>
+              );
+            case "FS_FS1_WHEEL":
+              return (
+                <div className="step">
+                  <h2>FS branch: initial wheel</h2>
+                  <Wheel
+                    config={wheelConfigs.FS_FS1_WHEEL}
+                    onConfigChange={(segments) =>
+                      updateWheelSegments("FS_FS1_WHEEL", segments)
+                    }
+                    onSpinComplete={(segment) => {
+                      recordWheelOutcome("FS_FS1_WHEEL", segment);
+                      if (segment.id === "FS1_SHIB") {
+                        setCurrentStep("FS_SHIB_WHEEL");
+                      } else if (
+                        segment.id === "FS1_OUTFIT_DELAY" ||
+                        segment.id === "FS1_OIL"
+                      ) {
+                        setCurrentStep("FS_TERMINUS_WHEELS");
+                      } else if (segment.id === "FS1_TRAD") {
+                        setCurrentStep("FS_TRAD_CL_CHOICE");
+                      }
+                    }}
+                  />
+                </div>
+              );
+            case "FS_SHIB_WHEEL":
+              return (
+                <div className="step">
+                  <h2>FS branch: Shib sub-wheel</h2>
+                  <Wheel
+                    config={wheelConfigs.FS_SHIB_WHEEL}
+                    onConfigChange={(segments) =>
+                      updateWheelSegments("FS_SHIB_WHEEL", segments)
+                    }
+                    onSpinComplete={(segment) => {
+                      recordWheelOutcome("FS_SHIB_WHEEL", segment);
+                      if (segment.id === "FS2_CORSET") {
+                        setCurrentStep("FS_CORSET_WHEEL");
+                      } else {
+                        setCurrentStep("FS_TERMINUS_WHEELS");
+                      }
+                    }}
+                  />
+                </div>
+              );
+            case "FS_CORSET_WHEEL":
+              return (
+                <div className="step">
+                  <h2>FS branch: Corset follow-up</h2>
+                  <Wheel
+                    config={wheelConfigs.FS_CORSET_WHEEL}
+                    onConfigChange={(segments) =>
+                      updateWheelSegments("FS_CORSET_WHEEL", segments)
+                    }
+                    onSpinComplete={(segment) => {
+                      recordWheelOutcome("FS_CORSET_WHEEL", segment);
+                      setCurrentStep("FS_TERMINUS_WHEELS");
+                    }}
+                  />
+                </div>
+              );
+            case "FS_TRAD_CL_CHOICE": {
+              const options = BUTTON_CONFIGS.FS_TRAD_CL_CHOICE;
+              return (
+                <div className="step">
+                  <h2>FS Trad: CL or No CL</h2>
+                  <div className="button-row">
+                    {options.map((btn) => (
+                      <button
+                        key={btn.id}
+                        className="choice-button"
+                        style={{ backgroundColor: btn.colour }}
+                        onClick={() => handleFsTradChoice(btn.id)}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            case "FS_FP_AND_FF_BSC":
+              return (
+                <div className="step">
+                  <h2>FS: FP multi-picker and F-F / BSC wheel</h2>
+                  <div className="two-column">
+                    <FPSelector
+                      fsHasCL={fsHasCL}
+                      onResolved={(result) => {
+                        setFpSelections(result);
+                        setFpResolved(true);
+                      }}
+                    />
+                    <Wheel
+                      config={wheelConfigs.FS_FF_BSC_WHEEL}
+                      onConfigChange={(segments) =>
+                        updateWheelSegments(
+                          "FS_FF_BSC_WHEEL",
+                          segments
+                        )
+                      }
+                      onSpinComplete={(segment) => {
+                        recordWheelOutcome(
+                          "FS_FF_BSC_WHEEL",
+                          segment
+                        );
+                        setFfOutcome(segment.label);
+                        setFfResolved(true);
+                      }}
+                      disabled={ffResolved}
+                      spinButtonLabel="Spin F-F / BSC wheel"
+                    />
+                  </div>
+                  {readyForFsTerminus && (
+                    <button
+                      className="primary-button"
+                      onClick={() =>
+                        setCurrentStep("FS_TERMINUS_WHEELS")
+                      }
+                    >
+                      Continue to FS terminus
+                    </button>
+                  )}
+                </div>
+              );
+            case "FS_TERMINUS_WHEELS":
+              return (
+                <div className="step">
+                  <h2>FS terminus</h2>
+                  <div className="two-column">
+                    <Wheel
+                      config={wheelConfigs.FS_LOCATION_WHEEL}
+                      onConfigChange={(segments) =>
+                        updateWheelSegments(
+                          "FS_LOCATION_WHEEL",
+                          segments
+                        )
+                      }
+                      onSpinComplete={(segment) => {
+                        recordWheelOutcome(
+                          "FS_LOCATION_WHEEL",
+                          segment
+                        );
+                        setLocationOutcome(segment.label);
+                        setLocationResolved(true);
+                      }}
+                      disabled={locationResolved}
+                      spinButtonLabel="Spin location wheel"
+                    />
+                    <div>
+                      <Wheel
+                        config={wheelConfigs.FS_ACCESSORIES_YN_WHEEL}
+                        onConfigChange={(segments) =>
+                          updateWheelSegments(
+                            "FS_ACCESSORIES_YN_WHEEL",
+                            segments
+                          )
+                        }
+                        onSpinComplete={(segment) => {
+                          recordWheelOutcome(
+                            "FS_ACCESSORIES_YN_WHEEL",
+                            segment
+                          );
+                          setAccessoriesWheelOutcome(segment.label);
+                          setAccessoriesWheelResolved(true);
+                          if (segment.id === "ACCESSORIES_YES") {
+                            setAccessoriesNeeded(true);
+                            setAccessoriesChosen(null);
+                          } else {
+                            setAccessoriesNeeded(false);
+                            setAccessoriesChosen([]);
+                          }
+                        }}
+                        disabled={accessoriesWheelResolved}
+                        spinButtonLabel="Spin accessories wheel"
+                      />
+                      {accessoriesWheelResolved && accessoriesNeeded && (
+                        <AccessoriesPicker
+                          onPicked={(items) => {
+                            setAccessoriesChosen(items);
+                          }}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  {readyForSummary && (
+                    <button
+                      className="primary-button"
+                      onClick={() =>
+                        setCurrentStep("SUMMARY")
+                      }
+                    >
+                      Show summary
+                    </button>
+                  )}
+                </div>
+              );
+            case "SUMMARY":
+              return (
+                <Summary
+                  path={path}
+                  buttons={buttons}
+                  wheels={wheels}
+                  fpSelections={fpSelections}
+                  ffOutcome={ffOutcome}
+                  locationOutcome={locationOutcome}
+                  accessoriesWheelOutcome={accessoriesWheelOutcome}
+                  accessoriesChosen={accessoriesChosen}
+                  onRestart={handleRestart}
+                />
+              );
+            default:
+              return null;
+          }
+        };
+
+        return (
+          <div className="app">
+            <header>
+              <h1>Conditional pinwheel randomiser</h1>
+              <p>
+                Configure the wheels and follow the flow. Segment labels
+                and weights can be edited for this session.
+              </p>
+            </header>
+            {renderStep()}
+          </div>
+        );
+      }
+
+      const root = ReactDOM.createRoot(
+        document.getElementById("root")
+      );
+      root.render(<App />);
+    </script>
+  </body>
+</html>
