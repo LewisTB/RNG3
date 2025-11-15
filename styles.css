@@ -59,12 +59,6 @@ body {
   letter-spacing: 0.03em;
 }
 
-.app-tagline {
-  margin: 0;
-  color: var(--muted);
-  font-size: 0.95rem;
-}
-
 .app-main {
   flex: 1;
 }
@@ -195,17 +189,9 @@ body {
   border-radius: 50%;
 }
 
+/* hide pointer to avoid visual/result mismatch confusion */
 .wheel-pointer {
-  position: absolute;
-  top: -2px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 0;
-  height: 0;
-  border-left: 12px solid transparent;
-  border-right: 12px solid transparent;
-  border-bottom: 20px solid var(--accent3);
-  filter: drop-shadow(0 0 4px rgba(0, 0, 0, 0.7));
+  display: none;
 }
 
 .wheel-controls {
@@ -328,7 +314,7 @@ body {
 .slot-reel {
   width: 100px;
   max-width: 110px;
-  height: 40px;
+  height: 32px;
   border-radius: 10px;
   border: 1px solid rgba(255, 255, 255, 0.2);
   overflow: hidden;
@@ -340,22 +326,22 @@ body {
 
 .slot-reel.small {
   width: 90px;
-  height: 34px;
+  height: 32px;
 }
 
 .slot-window {
   display: flex;
   flex-direction: column;
   transition: transform 0.09s ease-out;
-  height: 40px;
+  height: 32px;
 }
 
 .slot-reel.small .slot-window {
-  height: 34px;
+  height: 32px;
 }
 
 .slot-item {
-  height: 40px;
+  height: 32px;
   padding: 6px 6px;
   display: flex;
   align-items: center;
@@ -366,7 +352,7 @@ body {
 }
 
 .slot-reel.small .slot-item {
-  height: 34px;
+  height: 32px;
 }
 
 .accessory-reels {
