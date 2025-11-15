@@ -302,6 +302,23 @@ body {
   background: #171717;
 }
 
+.fp-slot-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.fp-slot-labels span {
+  width: 90px;
+  max-width: 110px;
+  text-align: center;
+}
+
 /* Slot machine visuals */
 
 .slot-area {
@@ -330,10 +347,15 @@ body {
   display: flex;
   flex-direction: column;
   transition: transform 0.09s ease-out;
+  height: 40px;
+}
+
+.slot-reel.small .slot-window {
+  height: 34px;
 }
 
 .slot-item {
-  height: 32px;
+  height: 40px;
   padding: 6px 6px;
   display: flex;
   align-items: center;
@@ -341,6 +363,10 @@ body {
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.slot-reel.small .slot-item {
+  height: 34px;
 }
 
 .accessory-reels {
