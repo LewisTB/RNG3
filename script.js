@@ -129,6 +129,7 @@
     { id: "jb_on", label: "JB:on", group: "JB" },
     { id: "tw", label: "TW", group: "Other" },
     { id: "nhj", label: "NHJ", group: "Other" },
+    { id: "x", label: "X", group: "Other" },
   ];
 
   config.accessoriesOptions = ["9mm", "bb8", "Ag", "clear"];
@@ -153,7 +154,7 @@
 
         tradCLChoice: null,
 
-        fpFinal: [],
+        fpFinal: { cl: null, jb: null, other: null },
         ffOutcome: null,
 
         location: null,
@@ -229,7 +230,7 @@
     }, 0);
 
     const geom = [];
-    let currentAngle = -Math.PI / 2; // start at top
+    let currentAngle = 0; // start at 0 radians (pointing right)
 
     if (segments.length === 0) return geom;
 
@@ -323,7 +324,7 @@
     return result;
   }
 
-  // Choose FP options randomly, enforcing CL/JB rules
+  // Choose FP options randomly (old helper – no longer used, but kept for reference)
   function chooseRandomFPOptions(available, count) {
     const chosen = [];
     const chosenGroups = { CL: false, JB: false };
@@ -597,7 +598,6 @@
           selectedIndex = index;
           drawWheel();
           const winningSegment = segments[index];
-          resultDiv.textContent = "Result: " + winningSegment.label;
           const snapshot = segments.map(function (seg) {
             return { key: seg.key, label: seg.label, weight: seg.weight };
           });
@@ -610,7 +610,7 @@
     });
   }
 
-  // ---------- FP random picker (slot-style, like accessories) ----------
+  // ---------- FP random picker (slot-style, with CL/JB/Other slots) ----------
 
   function renderFPRandomPicker(parent, onResolved) {
     const container = document.createElement("div");
@@ -621,23 +621,25 @@
 
     const helper = document.createElement("p");
     helper.className = "helper-text";
-    if (appState.fs.tradCLChoice === "No CL") {
+
+    const usingCL = appState.fs.tradCLChoice === "CL";
+    if (!usingCL) {
       helper.textContent =
-        "CL is set to No CL, so only non-CL FP options are eligible.";
+        "CL is set to No CL, so only JB and Other FP options (including X) are used. JB is always guaranteed.";
     } else {
       helper.textContent =
-        "Randomly selects FP options with at most one CL and one JB; CL-96 blocks JB.";
+        "CL is enabled: you will always get a CL result, and a JB result unless CL-96 appears (which blocks JB).";
     }
 
     const optionsStatic = document.createElement("div");
     optionsStatic.className = "fp-options-static";
 
     const noCL = appState.fs.tradCLChoice === "No CL";
-    const availableOptions = config.fpOptions.filter(function (opt) {
+    const eligibleOptions = config.fpOptions.filter(function (opt) {
       return !(noCL && opt.group === "CL");
     });
 
-    availableOptions.forEach(function (opt) {
+    eligibleOptions.forEach(function (opt) {
       const chip = document.createElement("span");
       chip.className = "fp-chip";
       chip.textContent = opt.label;
@@ -649,51 +651,128 @@
 
     let animating = false;
 
+    function randomFromArray(arr) {
+      if (!arr.length) return null;
+      const idx = Math.floor(Math.random() * arr.length);
+      return arr[idx];
+    }
+
     function doRandomise() {
       if (animating) return;
       animating = true;
       slotArea.innerHTML = "";
 
-      const count = Math.random() < 0.5 ? 1 : 2;
-      const chosenOptions = chooseRandomFPOptions(availableOptions, count);
-      const chosenLabels = chosenOptions.map(function (o) {
-        return o.label;
+      const allOptions = config.fpOptions;
+      const clOptions = allOptions.filter(function (o) {
+        return o.group === "CL";
       });
-      appState.fs.fpFinal = chosenLabels;
-
-      const reelRow = document.createElement("div");
-      reelRow.className = "accessory-reels";
-
-      const displayNames = availableOptions.map(function (o) {
-        return o.label;
+      const jbOptions = allOptions.filter(function (o) {
+        return o.group === "JB";
+      });
+      const otherOptions = allOptions.filter(function (o) {
+        return o.group === "Other";
       });
 
-      chosenLabels.forEach(function (name) {
+      const noCL = appState.fs.tradCLChoice === "No CL";
+
+      let chosenCL = null;
+      if (!noCL) {
+        chosenCL = randomFromArray(clOptions);
+      }
+
+      const hasCL96 = !!(chosenCL && chosenCL.clType === "cl96");
+
+      let chosenJB = null;
+      if (!hasCL96) {
+        chosenJB = randomFromArray(jbOptions);
+      }
+
+      const chosenOther = randomFromArray(otherOptions);
+
+      appState.fs.fpFinal = {
+        cl: chosenCL ? chosenCL.label : null,
+        jb: hasCL96
+          ? "JB blocked (CL-96)"
+          : chosenJB
+          ? chosenJB.label
+          : null,
+        other: chosenOther ? chosenOther.label : null,
+      };
+
+      const labelRow = document.createElement("div");
+      labelRow.className = "fp-slot-labels";
+
+      const reelsRow = document.createElement("div");
+      reelsRow.className = "accessory-reels fp-reels";
+
+      function buildSlot(labelText, itemLabels, targetLabel, staticLabel) {
+        const labelSpan = document.createElement("span");
+        labelSpan.textContent = labelText;
+        labelRow.appendChild(labelSpan);
+
         const slot = document.createElement("div");
         slot.className = "slot-reel small";
 
         const windowEl = document.createElement("div");
         windowEl.className = "slot-window";
 
-        displayNames.forEach(function (optName) {
+        slot.appendChild(windowEl);
+        reelsRow.appendChild(slot);
+
+        if (staticLabel) {
           const item = document.createElement("div");
           item.className = "slot-item";
-          item.textContent = optName;
+          item.textContent = staticLabel;
           windowEl.appendChild(item);
+        } else {
+          itemLabels.forEach(function (name) {
+            const item = document.createElement("div");
+            item.className = "slot-item";
+            item.textContent = name;
+            windowEl.appendChild(item);
+          });
+          animateAccessoriesSlot(windowEl, itemLabels, targetLabel);
+        }
+      }
+
+      if (!noCL) {
+        const clNames = clOptions.map(function (o) {
+          return o.label;
         });
+        buildSlot(
+          "CL",
+          clNames,
+          chosenCL ? chosenCL.label : clNames[0],
+          null
+        );
+      }
 
-        slot.appendChild(windowEl);
-        reelRow.appendChild(slot);
-
-        animateAccessoriesSlot(windowEl, displayNames, name);
+      const jbNames = jbOptions.map(function (o) {
+        return o.label;
       });
+      if (hasCL96) {
+        buildSlot("JB", [], null, "JB blocked (CL-96)");
+      } else {
+        buildSlot(
+          "JB",
+          jbNames,
+          chosenJB ? chosenJB.label : jbNames[0],
+          null
+        );
+      }
 
-      slotArea.appendChild(reelRow);
+      const otherNames = otherOptions.map(function (o) {
+        return o.label;
+      });
+      buildSlot(
+        "Other",
+        otherNames,
+        chosenOther ? chosenOther.label : otherNames[0],
+        null
+      );
 
-      const summary = document.createElement("p");
-      summary.className = "helper-text";
-      summary.textContent = "FP result: " + chosenLabels.join(", ");
-      slotArea.appendChild(summary);
+      slotArea.appendChild(labelRow);
+      slotArea.appendChild(reelsRow);
 
       if (typeof onResolved === "function") {
         onResolved();
@@ -883,7 +962,7 @@
       shibStyle: null,
       corsetDetail: null,
       tradCLChoice: null,
-      fpFinal: [],
+      fpFinal: { cl: null, jb: null, other: null },
       ffOutcome: null,
       location: null,
       accessoriesWheel: null,
@@ -1023,7 +1102,7 @@
     config.buttons.tradCL.forEach(function (btnCfg) {
       const btn = createButtonFromConfig(btnCfg, function () {
         appState.fs.tradCLChoice = btnCfg.id === "NoCL" ? "No CL" : "CL";
-        appState.fs.fpFinal = [];
+        appState.fs.fpFinal = { cl: null, jb: null, other: null };
         appState.fs.ffOutcome = null;
         showFPAndFFBSC();
       });
@@ -1071,20 +1150,39 @@
     layout.appendChild(wheelPanel);
     card.appendChild(layout);
 
-    let fpReady = appState.fs.fpFinal.length > 0;
-    let ffReady = !!appState.fs.ffOutcome;
-
     const footer = document.createElement("div");
     footer.className = "card-footer";
 
     const backBtn = createBackButton(showTradCLChoice);
 
+    function fpIsReady() {
+      const fp = appState.fs.fpFinal || {};
+      if (appState.fs.tradCLChoice === "CL") {
+        return !!fp.cl && !!fp.jb && !!fp.other;
+      }
+      // No CL branch only needs JB and Other
+      return !!fp.jb && !!fp.other;
+    }
+
+    function fpSummaryText() {
+      const fp = appState.fs.fpFinal || {};
+      const parts = [];
+      if (fp.cl) parts.push(fp.cl);
+      if (fp.jb) parts.push(fp.jb);
+      if (fp.other) parts.push(fp.other);
+      return parts.join(" | ");
+    }
+
+    let fpReady = fpIsReady();
+    let ffReady = !!appState.fs.ffOutcome;
+
     const continueBtn = createPrimaryButton(
       "Continue to location",
       function () {
         const parts = [];
-        if (appState.fs.fpFinal.length) {
-          parts.push(appState.fs.fpFinal.join(", "));
+        const fpText = fpSummaryText();
+        if (fpText) {
+          parts.push(fpText);
         }
         if (appState.fs.ffOutcome) {
           parts.push(appState.fs.ffOutcome);
@@ -1103,11 +1201,12 @@
     card.appendChild(footer);
 
     function updateContinueState() {
+      fpReady = fpIsReady();
+      ffReady = !!appState.fs.ffOutcome;
       continueBtn.disabled = !(fpReady && ffReady);
     }
 
     renderFPRandomPicker(fpPanel, function () {
-      fpReady = appState.fs.fpFinal.length > 0;
       updateContinueState();
     });
 
@@ -1300,11 +1399,6 @@
 
         slotsArea.appendChild(reelRow);
 
-        const summary = document.createElement("p");
-        summary.className = "helper-text";
-        summary.textContent = "Accessories chosen: " + chosen.join(", ");
-        slotsArea.appendChild(summary);
-
         continueBtn.disabled = false;
       },
       config.palette.accent2
@@ -1347,10 +1441,11 @@
       if (appState.fs.shibStyle) labels.push(appState.fs.shibStyle);
       if (appState.fs.corsetDetail) labels.push(appState.fs.corsetDetail);
       if (appState.fs.tradCLChoice) labels.push(appState.fs.tradCLChoice);
-      if (appState.fs.fpFinal && appState.fs.fpFinal.length) {
-        appState.fs.fpFinal.forEach(function (l) {
-          labels.push(l);
-        });
+      if (appState.fs.fpFinal) {
+        const fp = appState.fs.fpFinal;
+        if (fp.cl) labels.push(fp.cl);
+        if (fp.jb) labels.push(fp.jb);
+        if (fp.other) labels.push(fp.other);
       }
       if (appState.fs.ffOutcome) labels.push(appState.fs.ffOutcome);
       if (appState.fs.location) labels.push(appState.fs.location);
