@@ -1024,4 +1024,518 @@
     card.appendChild(title);
     card.appendChild(subtitle);
 
-    creat
+    createWheelComponent(card, config.wheels.corsetDetail, {
+      spinLabel: "Spin Sense-dep / BSC",
+      onResult: function (segment) {
+        appState.fs.corsetDetail = segment.label;
+        showResultOverlay(segment.label, function () {
+          showLocationWheel("shib");
+        });
+      },
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const backBtn = createBackButton(showShibSubWheel);
+    footer.appendChild(backBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showTradCLChoice() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS branch – Trad: CL or No CL";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Choose whether CL options are allowed when FP is randomised.";
+
+    const buttonsRow = document.createElement("div");
+    buttonsRow.className = "button-row";
+
+    config.buttons.tradCL.forEach(function (btnCfg) {
+      const btn = createButtonFromConfig(btnCfg, function () {
+        appState.fs.tradCLChoice = btnCfg.id === "NoCL" ? "No CL" : "CL";
+        appState.fs.fpFinal = { cl: null, jb: null, other: null };
+        appState.fs.ffOutcome = null;
+        showFPAndFFBSC();
+      });
+      buttonsRow.appendChild(btn);
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const backBtn = createBackButton(showFSInitialWheel);
+    footer.appendChild(backBtn);
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+    card.appendChild(buttonsRow);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showFPAndFFBSC() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS branch – FP and F-F / BSC";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Randomise FP (slot-style) and spin the F-F / BSC wheel. When both are ready, continue to the FS terminus.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    const layout = document.createElement("div");
+    layout.className = "dual-layout";
+
+    const fpPanel = document.createElement("div");
+    fpPanel.className = "panel fp-panel";
+
+    const wheelPanel = document.createElement("div");
+    wheelPanel.className = "panel wheel-panel";
+
+    layout.appendChild(fpPanel);
+    layout.appendChild(wheelPanel);
+    card.appendChild(layout);
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+
+    const backBtn = createBackButton(showTradCLChoice);
+
+    function fpIsReady() {
+      const fp = appState.fs.fpFinal || {};
+      if (appState.fs.tradCLChoice === "CL") {
+        return !!fp.cl && !!fp.jb && !!fp.other;
+      }
+      // No CL branch only needs JB and Other
+      return !!fp.jb && !!fp.other;
+    }
+
+    function fpSummaryText() {
+      const fp = appState.fs.fpFinal || {};
+      const parts = [];
+      if (fp.cl) parts.push(fp.cl);
+      if (fp.jb) parts.push(fp.jb);
+      if (fp.other) parts.push(fp.other);
+      return parts.join(" | ");
+    }
+
+    let fpReady = fpIsReady();
+    let ffReady = !!appState.fs.ffOutcome;
+
+    const continueBtn = createPrimaryButton(
+      "Continue to location",
+      function () {
+        const parts = [];
+        const fpText = fpSummaryText();
+        if (fpText) {
+          parts.push(fpText);
+        }
+        if (appState.fs.ffOutcome) {
+          parts.push(appState.fs.ffOutcome);
+        }
+        const overlayText = parts.length ? parts.join(" • ") : "Next";
+        showResultOverlay(overlayText, function () {
+          showLocationWheel("fp");
+        });
+      },
+      config.palette.accent1
+    );
+    continueBtn.disabled = !(fpReady && ffReady);
+
+    footer.appendChild(backBtn);
+    footer.appendChild(continueBtn);
+    card.appendChild(footer);
+
+    function updateContinueState() {
+      fpReady = fpIsReady();
+      ffReady = !!appState.fs.ffOutcome;
+      continueBtn.disabled = !(fpReady && ffReady);
+    }
+
+    renderFPRandomPicker(fpPanel, function () {
+      updateContinueState();
+    });
+
+    createWheelComponent(wheelPanel, config.wheels.ffBsc, {
+      spinLabel: "Spin F-F / BSC",
+      onResult: function (segment) {
+        appState.fs.ffOutcome = segment.label;
+        updateContinueState();
+      },
+    });
+
+    setView(card);
+  }
+
+  // ---------- FS terminus ----------
+
+  function showLocationWheel(source) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS terminus – location";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent = "Spin to decide the location.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    createWheelComponent(card, config.wheels.location, {
+      spinLabel: "Spin location",
+      onResult: function (segment) {
+        appState.fs.location = segment.label;
+        showResultOverlay(segment.label, function () {
+          showAccessoriesWheel(source);
+        });
+      },
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+
+    const backBtn = createBackButton(function () {
+      if (!source || source === "fsInitial") {
+        showFSInitialWheel();
+      } else if (source === "shib") {
+        if (appState.fs.shibStyle) {
+          showShibSubWheel();
+        } else {
+          showFSInitialWheel();
+        }
+      } else if (source === "fp") {
+        showFPAndFFBSC();
+      } else {
+        showFSInitialWheel();
+      }
+    });
+
+    footer.appendChild(backBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showAccessoriesWheel(source) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS terminus – accessories wheel";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Spin to see whether accessories are involved. If yes, you’ll move on to a picker.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    createWheelComponent(card, config.wheels.accessoriesYN, {
+      spinLabel: "Spin accessories",
+      onResult: function (segment) {
+        appState.fs.accessoriesWheel = segment.label;
+        let label = segment.label;
+        if (label === "Yes") label = "Yes accessories";
+        if (label === "No") label = "No accessories";
+        showResultOverlay(label, function () {
+          if (segment.key === "yes") {
+            showAccessoriesPicker(source);
+          } else {
+            appState.fs.accessories = [];
+            showFinalSummary();
+          }
+        });
+      },
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+
+    const backBtn = createBackButton(function () {
+      showLocationWheel(source);
+    });
+
+    footer.appendChild(backBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showAccessoriesPicker(source) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS terminus – accessories picker";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Click to let the reels pick two accessories in sequence. The second slot cannot repeat the first and has an even chance of showing X.";
+
+    const list = document.createElement("div");
+    list.className = "accessory-list";
+
+    config.accessoriesOptions.forEach(function (name) {
+      const item = document.createElement("div");
+      item.className = "accessory-chip";
+      item.textContent = name;
+      list.appendChild(item);
+    });
+
+    const slotsArea = document.createElement("div");
+    slotsArea.className = "slot-area accessory-slots";
+
+    const buttonsRow = document.createElement("div");
+    buttonsRow.className = "button-row";
+
+    let running = false;
+
+    const continueBtn = createPrimaryButton(
+      "Finish and see summary",
+      function () {
+        const label =
+          appState.fs.accessories && appState.fs.accessories.length
+            ? appState.fs.accessories.join(", ")
+            : "No accessories";
+        showResultOverlay(label, function () {
+          showFinalSummary();
+        });
+      },
+      config.palette.accent1
+    );
+    continueBtn.disabled = true;
+
+    const pickBtn = createPrimaryButton(
+      "Pick accessories",
+      function () {
+        if (running) return;
+        running = true;
+        continueBtn.disabled = true;
+
+        const baseOptions = config.accessoriesOptions.slice(); // 4 base options
+
+        slotsArea.innerHTML = "";
+
+        const reelRow = document.createElement("div");
+        reelRow.className = "accessory-reels";
+
+        // Slot 1
+        const slot1 = document.createElement("div");
+        slot1.className = "slot-reel";
+
+        const slot1Window = document.createElement("div");
+        slot1Window.className = "slot-window";
+        slot1.appendChild(slot1Window);
+        reelRow.appendChild(slot1);
+
+        // Fill slot 1 window with base options
+        baseOptions.forEach(function (optName) {
+          const item = document.createElement("div");
+          item.className = "slot-item";
+          item.textContent = optName;
+          slot1Window.appendChild(item);
+        });
+
+        // Slot 2
+        const slot2 = document.createElement("div");
+        slot2.className = "slot-reel";
+
+        const slot2Window = document.createElement("div");
+        slot2Window.className = "slot-window";
+        slot2.appendChild(slot2Window);
+        reelRow.appendChild(slot2);
+
+        slotsArea.appendChild(reelRow);
+
+        // Choose first slot result
+        const firstIdx = Math.floor(Math.random() * baseOptions.length);
+        const firstChoice = baseOptions[firstIdx];
+
+        animateAccessoriesSlot(slot1Window, baseOptions, firstChoice, function () {
+          // Build slot 2 options: remaining + three Xs
+          const remaining = baseOptions.filter(function (o) {
+            return o !== firstChoice;
+          });
+          const slot2Options = remaining.concat(["X", "X", "X"]);
+
+          // Fill slot 2 window
+          slot2Window.innerHTML = "";
+          slot2Options.forEach(function (optName) {
+            const item = document.createElement("div");
+            item.className = "slot-item";
+            item.textContent = optName;
+            slot2Window.appendChild(item);
+          });
+
+          const secondIdx = Math.floor(Math.random() * slot2Options.length);
+          const secondChoice = slot2Options[secondIdx];
+
+          animateAccessoriesSlot(
+            slot2Window,
+            slot2Options,
+            secondChoice,
+            function () {
+              appState.fs.accessories = [firstChoice, secondChoice];
+              continueBtn.disabled = false;
+              running = false;
+            }
+          );
+        });
+      },
+      config.palette.accent2
+    );
+
+    buttonsRow.appendChild(pickBtn);
+    buttonsRow.appendChild(continueBtn);
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const backBtn = createBackButton(function () {
+      showAccessoriesWheel(source);
+    });
+    footer.appendChild(backBtn);
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+    card.appendChild(list);
+    card.appendChild(slotsArea);
+    card.appendChild(buttonsRow);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  // ---------- Final summary ----------
+
+  function buildSummaryLabels() {
+    const labels = [];
+    if (appState.path) {
+      labels.push(appState.path);
+    }
+
+    if (appState.path === "P") {
+      if (appState.p.subChoice) labels.push(appState.p.subChoice);
+      if (appState.p.wheelResult) labels.push(appState.p.wheelResult);
+    } else if (appState.path === "FS") {
+      if (appState.fs.fsInitialOutcome)
+        labels.push(appState.fs.fsInitialOutcome);
+      if (appState.fs.shibStyle) labels.push(appState.fs.shibStyle);
+      if (appState.fs.corsetDetail) labels.push(appState.fs.corsetDetail);
+      if (appState.fs.tradCLChoice) labels.push(appState.fs.tradCLChoice);
+      if (appState.fs.fpFinal) {
+        const fp = appState.fs.fpFinal;
+        if (fp.cl) labels.push(fp.cl);
+        if (fp.jb) labels.push(fp.jb);
+        if (fp.other) labels.push(fp.other);
+      }
+      if (appState.fs.ffOutcome) labels.push(appState.fs.ffOutcome);
+      if (appState.fs.location) labels.push(appState.fs.location);
+
+      if (appState.fs.accessoriesWheel) {
+        let accLabel = appState.fs.accessoriesWheel;
+        if (accLabel === "Yes") accLabel = "Yes accessories";
+        if (accLabel === "No") accLabel = "No accessories";
+        labels.push(accLabel);
+      }
+
+      if (appState.fs.accessories && appState.fs.accessories.length) {
+        appState.fs.accessories.forEach(function (a) {
+          labels.push(a);
+        });
+      }
+    }
+
+    return labels;
+  }
+
+  function showFinalSummary() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "Summary";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Your run, as a set of result labels. Each tile represents an outcome along the path.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    const labels = buildSummaryLabels();
+
+    const section = document.createElement("section");
+    section.className = "summary-section";
+
+    const grid = document.createElement("div");
+    grid.className = "summary-grid";
+
+    if (!labels.length) {
+      const empty = document.createElement("p");
+      empty.className = "summary-empty";
+      empty.textContent = "No results recorded.";
+      section.appendChild(empty);
+    } else {
+      const colours = [
+        config.palette.accent1,
+        config.palette.accent2,
+        config.palette.accent3,
+        config.palette.accent4,
+        config.palette.accent5,
+      ];
+
+      labels.forEach(function (label, index) {
+        const tile = document.createElement("div");
+        tile.className = "summary-tile";
+        const colour = colours[index % colours.length];
+        tile.style.background = colour;
+        tile.textContent = label;
+        grid.appendChild(tile);
+      });
+
+      section.appendChild(grid);
+    }
+
+    card.appendChild(section);
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+
+    const restartBtn = createButtonFromConfig(config.buttons.restart, function () {
+      appState = resetAppState();
+      showChoice1();
+    });
+
+    footer.appendChild(restartBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  // ---------- Init ----------
+
+  function init() {
+    appState = resetAppState();
+    showChoice1();
+  }
+
+  init();
+})();
