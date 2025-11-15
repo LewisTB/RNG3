@@ -44,7 +44,7 @@
     },
   };
 
-  // Wheel definitions
+  // Wheel definitions (weights now all single digits)
   config.wheels = {
     pS: {
       id: "pS",
@@ -60,18 +60,18 @@
       id: "pD",
       title: "P branch – D path wheel",
       segments: [
-        { key: "oil_he", label: "Oil+HE", weight: 40 },
-        { key: "no_oil_fp", label: "No oil FP", weight: 60 },
+        { key: "oil_he", label: "Oil+HE", weight: 4 },
+        { key: "no_oil_fp", label: "No oil FP", weight: 6 },
       ],
     },
     fsInitial: {
       id: "fsInitial",
       title: "FS branch – initial wheel",
       segments: [
-        { key: "shib", label: "Shib", weight: 10 },
-        { key: "outfitDelay", label: "outfit+delay", weight: 10 },
-        { key: "oil", label: "Oil", weight: 10 },
-        { key: "trad", label: "Trad", weight: 70 },
+        { key: "shib", label: "Shib", weight: 1 },
+        { key: "outfitDelay", label: "outfit+delay", weight: 1 },
+        { key: "oil", label: "Oil", weight: 1 },
+        { key: "trad", label: "Trad", weight: 7 },
       ],
     },
     shibStyle: {
@@ -84,10 +84,10 @@
     },
     corsetDetail: {
       id: "corsetDetail",
-      title: "Corset – Sense-dep / BSC",
+      title: "Sense-dep / BSC wheel",
       segments: [
-        { key: "sense_dep", label: "Sense-dep", weight: 40 },
-        { key: "bsc", label: "BSC", weight: 60 },
+        { key: "sense_dep", label: "Sense-dep", weight: 4 },
+        { key: "bsc", label: "BSC", weight: 6 },
       ],
     },
     ffBsc: {
@@ -102,9 +102,9 @@
       id: "location",
       title: "Location wheel",
       segments: [
-        { key: "bedroom", label: "Bedroom", weight: 75 },
-        { key: "office", label: "Office", weight: 20 },
-        { key: "living_room", label: "Living room", weight: 5 },
+        { key: "bedroom", label: "Bedroom", weight: 8 },
+        { key: "office", label: "Office", weight: 2 },
+        { key: "living_room", label: "Living room", weight: 1 },
       ],
     },
     accessoriesYN: {
@@ -230,7 +230,7 @@
     }, 0);
 
     const geom = [];
-    let currentAngle = 0; // start at 0 radians (pointing right)
+    let currentAngle = -Math.PI / 2; // start at top
 
     if (segments.length === 0) return geom;
 
@@ -286,10 +286,11 @@
     return "#" + toHex(r) + toHex(g) + toHex(b);
   }
 
-  function animateAccessoriesSlot(windowEl, items, targetLabel) {
+  // Slot animation: fixed item height, optional callback when finished
+  function animateAccessoriesSlot(windowEl, items, targetLabel, done) {
     const children = windowEl.querySelectorAll(".slot-item");
     if (!children.length) return;
-    const itemHeight = children[0].offsetHeight || 32;
+    const itemHeight = 32; // match CSS
     let index = 0;
     let steps = 0;
     const maxSteps = 18 + Math.floor(Math.random() * 10);
@@ -307,6 +308,8 @@
       windowEl.style.transform = "translateY(" + offset + "px)";
       if (steps < maxSteps + 4) {
         setTimeout(tick, 90);
+      } else if (typeof done === "function") {
+        done();
       }
     }
 
@@ -322,48 +325,6 @@
       copy.splice(idx, 1);
     }
     return result;
-  }
-
-  // Choose FP options randomly (old helper – no longer used, but kept for reference)
-  function chooseRandomFPOptions(available, count) {
-    const chosen = [];
-    const chosenGroups = { CL: false, JB: false };
-    let hasCL96 = false;
-
-    for (let k = 0; k < count; k++) {
-      const pool = available.filter(function (opt) {
-        if (chosen.some((c) => c.id === opt.id)) return false;
-
-        if (opt.group === "CL" && chosenGroups.CL) return false;
-        if (opt.group === "JB" && chosenGroups.JB) return false;
-
-        if (hasCL96 && opt.group === "JB") return false;
-
-        return true;
-      });
-
-      if (!pool.length) break;
-
-      const idx = Math.floor(Math.random() * pool.length);
-      const pick = pool[idx];
-      chosen.push(pick);
-
-      if (pick.group === "CL") {
-        chosenGroups.CL = true;
-        if (pick.clType === "cl96") {
-          hasCL96 = true;
-        }
-      }
-      if (pick.group === "JB") {
-        chosenGroups.JB = true;
-      }
-    }
-
-    if (!chosen.length && available.length) {
-      chosen.push(available[0]);
-    }
-
-    return chosen;
   }
 
   // ---------- UI helpers ----------
@@ -422,11 +383,12 @@
     canvas.width = 320;
     canvas.height = 320;
 
-    const pointer = document.createElement("div");
-    pointer.className = "wheel-pointer";
+    // Pointer removed visually to avoid any mismatch confusion
+    // const pointer = document.createElement("div");
+    // pointer.className = "wheel-pointer";
 
     wheelWrapper.appendChild(canvas);
-    wheelWrapper.appendChild(pointer);
+    // wheelWrapper.appendChild(pointer);
 
     const controls = document.createElement("div");
     controls.className = "wheel-controls";
@@ -548,7 +510,7 @@
 
     const resultDiv = document.createElement("div");
     resultDiv.className = "wheel-result";
-    resultDiv.textContent = "";
+    resultDiv.textContent = ""; // no immediate result text visible
 
     controls.appendChild(segmentEditor);
     controls.appendChild(spinBtn);
@@ -703,7 +665,7 @@
       labelRow.className = "fp-slot-labels";
 
       const reelsRow = document.createElement("div");
-      reelsRow.className = "accessory-reels fp-reels";
+      reelsRow.className = "accessory-reels";
 
       function buildSlot(labelText, itemLabels, targetLabel, staticLabel) {
         const labelSpan = document.createElement("span");
@@ -1031,12 +993,9 @@
       spinLabel: "Spin Shib wheel",
       onResult: function (segment) {
         appState.fs.shibStyle = segment.label;
+        // Both Corset and Restrained now go to Sense-dep / BSC wheel
         showResultOverlay(segment.label, function () {
-          if (segment.key === "corset") {
-            showCorsetDetailWheel();
-          } else {
-            showLocationWheel("shib");
-          }
+          showCorsetDetailWheel();
         });
       },
     });
@@ -1055,491 +1014,14 @@
     card.className = "card";
 
     const title = document.createElement("h2");
-    title.textContent = "FS branch – Corset detail";
+    title.textContent = "FS branch – Sense-dep / BSC";
 
     const subtitle = document.createElement("p");
     subtitle.className = "subtitle";
     subtitle.textContent =
-      "Spin to decide between Sense-dep and BSC, then proceed to the FS terminus.";
+      "Spin to decide between Sense-dep and BSC (4/6 split), then proceed to the FS terminus.";
 
     card.appendChild(title);
     card.appendChild(subtitle);
 
-    createWheelComponent(card, config.wheels.corsetDetail, {
-      spinLabel: "Spin Sense-dep / BSC",
-      onResult: function (segment) {
-        appState.fs.corsetDetail = segment.label;
-        showResultOverlay(segment.label, function () {
-          showLocationWheel("shib");
-        });
-      },
-    });
-
-    const footer = document.createElement("div");
-    footer.className = "card-footer";
-    const backBtn = createBackButton(showShibSubWheel);
-    footer.appendChild(backBtn);
-    card.appendChild(footer);
-
-    setView(card);
-  }
-
-  function showTradCLChoice() {
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const title = document.createElement("h2");
-    title.textContent = "FS branch – Trad: CL or No CL";
-
-    const subtitle = document.createElement("p");
-    subtitle.className = "subtitle";
-    subtitle.textContent =
-      "Choose whether CL options are allowed when FP is randomised.";
-
-    const buttonsRow = document.createElement("div");
-    buttonsRow.className = "button-row";
-
-    config.buttons.tradCL.forEach(function (btnCfg) {
-      const btn = createButtonFromConfig(btnCfg, function () {
-        appState.fs.tradCLChoice = btnCfg.id === "NoCL" ? "No CL" : "CL";
-        appState.fs.fpFinal = { cl: null, jb: null, other: null };
-        appState.fs.ffOutcome = null;
-        showFPAndFFBSC();
-      });
-      buttonsRow.appendChild(btn);
-    });
-
-    const footer = document.createElement("div");
-    footer.className = "card-footer";
-    const backBtn = createBackButton(showFSInitialWheel);
-    footer.appendChild(backBtn);
-
-    card.appendChild(title);
-    card.appendChild(subtitle);
-    card.appendChild(buttonsRow);
-    card.appendChild(footer);
-
-    setView(card);
-  }
-
-  function showFPAndFFBSC() {
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const title = document.createElement("h2");
-    title.textContent = "FS branch – FP and F-F / BSC";
-
-    const subtitle = document.createElement("p");
-    subtitle.className = "subtitle";
-    subtitle.textContent =
-      "Randomise FP (slot-style) and spin the F-F / BSC wheel. When both are ready, continue to the FS terminus.";
-
-    card.appendChild(title);
-    card.appendChild(subtitle);
-
-    const layout = document.createElement("div");
-    layout.className = "dual-layout";
-
-    const fpPanel = document.createElement("div");
-    fpPanel.className = "panel fp-panel";
-
-    const wheelPanel = document.createElement("div");
-    wheelPanel.className = "panel wheel-panel";
-
-    layout.appendChild(fpPanel);
-    layout.appendChild(wheelPanel);
-    card.appendChild(layout);
-
-    const footer = document.createElement("div");
-    footer.className = "card-footer";
-
-    const backBtn = createBackButton(showTradCLChoice);
-
-    function fpIsReady() {
-      const fp = appState.fs.fpFinal || {};
-      if (appState.fs.tradCLChoice === "CL") {
-        return !!fp.cl && !!fp.jb && !!fp.other;
-      }
-      // No CL branch only needs JB and Other
-      return !!fp.jb && !!fp.other;
-    }
-
-    function fpSummaryText() {
-      const fp = appState.fs.fpFinal || {};
-      const parts = [];
-      if (fp.cl) parts.push(fp.cl);
-      if (fp.jb) parts.push(fp.jb);
-      if (fp.other) parts.push(fp.other);
-      return parts.join(" | ");
-    }
-
-    let fpReady = fpIsReady();
-    let ffReady = !!appState.fs.ffOutcome;
-
-    const continueBtn = createPrimaryButton(
-      "Continue to location",
-      function () {
-        const parts = [];
-        const fpText = fpSummaryText();
-        if (fpText) {
-          parts.push(fpText);
-        }
-        if (appState.fs.ffOutcome) {
-          parts.push(appState.fs.ffOutcome);
-        }
-        const overlayText = parts.length ? parts.join(" • ") : "Next";
-        showResultOverlay(overlayText, function () {
-          showLocationWheel("fp");
-        });
-      },
-      config.palette.accent1
-    );
-    continueBtn.disabled = !(fpReady && ffReady);
-
-    footer.appendChild(backBtn);
-    footer.appendChild(continueBtn);
-    card.appendChild(footer);
-
-    function updateContinueState() {
-      fpReady = fpIsReady();
-      ffReady = !!appState.fs.ffOutcome;
-      continueBtn.disabled = !(fpReady && ffReady);
-    }
-
-    renderFPRandomPicker(fpPanel, function () {
-      updateContinueState();
-    });
-
-    createWheelComponent(wheelPanel, config.wheels.ffBsc, {
-      spinLabel: "Spin F-F / BSC",
-      onResult: function (segment) {
-        appState.fs.ffOutcome = segment.label;
-        // No page change here – we only move when the user hits Continue
-        updateContinueState();
-      },
-    });
-
-    setView(card);
-  }
-
-  // ---------- FS terminus ----------
-
-  function showLocationWheel(source) {
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const title = document.createElement("h2");
-    title.textContent = "FS terminus – location";
-
-    const subtitle = document.createElement("p");
-    subtitle.className = "subtitle";
-    subtitle.textContent = "Spin to decide the location.";
-
-    card.appendChild(title);
-    card.appendChild(subtitle);
-
-    createWheelComponent(card, config.wheels.location, {
-      spinLabel: "Spin location",
-      onResult: function (segment) {
-        appState.fs.location = segment.label;
-        showResultOverlay(segment.label, function () {
-          showAccessoriesWheel(source);
-        });
-      },
-    });
-
-    const footer = document.createElement("div");
-    footer.className = "card-footer";
-
-    const backBtn = createBackButton(function () {
-      if (!source || source === "fsInitial") {
-        showFSInitialWheel();
-      } else if (source === "shib") {
-        // Back to Shib branch entry
-        if (appState.fs.shibStyle) {
-          showShibSubWheel();
-        } else {
-          showFSInitialWheel();
-        }
-      } else if (source === "fp") {
-        showFPAndFFBSC();
-      } else {
-        showFSInitialWheel();
-      }
-    });
-
-    footer.appendChild(backBtn);
-    card.appendChild(footer);
-
-    setView(card);
-  }
-
-  function showAccessoriesWheel(source) {
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const title = document.createElement("h2");
-    title.textContent = "FS terminus – accessories wheel";
-
-    const subtitle = document.createElement("p");
-    subtitle.className = "subtitle";
-    subtitle.textContent =
-      "Spin to see whether accessories are involved. If yes, you’ll move on to a picker.";
-
-    card.appendChild(title);
-    card.appendChild(subtitle);
-
-    createWheelComponent(card, config.wheels.accessoriesYN, {
-      spinLabel: "Spin accessories",
-      onResult: function (segment) {
-        appState.fs.accessoriesWheel = segment.label;
-        let label = segment.label;
-        if (label === "Yes") label = "Yes accessories";
-        if (label === "No") label = "No accessories";
-        showResultOverlay(label, function () {
-          if (segment.key === "yes") {
-            showAccessoriesPicker(source);
-          } else {
-            appState.fs.accessories = [];
-            showFinalSummary();
-          }
-        });
-      },
-    });
-
-    const footer = document.createElement("div");
-    footer.className = "card-footer";
-
-    const backBtn = createBackButton(function () {
-      showLocationWheel(source);
-    });
-
-    footer.appendChild(backBtn);
-    card.appendChild(footer);
-
-    setView(card);
-  }
-
-  function showAccessoriesPicker(source) {
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const title = document.createElement("h2");
-    title.textContent = "FS terminus – accessories picker";
-
-    const subtitle = document.createElement("p");
-    subtitle.className = "subtitle";
-    subtitle.textContent =
-      "Click to let the reels pick either one or two accessories at random, then continue to the summary.";
-
-    const list = document.createElement("div");
-    list.className = "accessory-list";
-
-    config.accessoriesOptions.forEach(function (name) {
-      const item = document.createElement("div");
-      item.className = "accessory-chip";
-      item.textContent = name;
-      list.appendChild(item);
-    });
-
-    const slotsArea = document.createElement("div");
-    slotsArea.className = "slot-area accessory-slots";
-
-    const buttonsRow = document.createElement("div");
-    buttonsRow.className = "button-row";
-
-    const continueBtn = createPrimaryButton(
-      "Finish and see summary",
-      function () {
-        const label =
-          appState.fs.accessories && appState.fs.accessories.length
-            ? appState.fs.accessories.join(", ")
-            : "No accessories";
-        showResultOverlay(label, function () {
-          showFinalSummary();
-        });
-      },
-      config.palette.accent1
-    );
-    continueBtn.disabled = true;
-
-    const pickBtn = createPrimaryButton(
-      "Pick accessories",
-      function () {
-        const count = Math.random() < 0.5 ? 1 : 2;
-        const chosen = pickRandomSubset(config.accessoriesOptions, count);
-        appState.fs.accessories = chosen.slice();
-
-        slotsArea.innerHTML = "";
-
-        const reelRow = document.createElement("div");
-        reelRow.className = "accessory-reels";
-
-        const displayNames = config.accessoriesOptions.slice();
-
-        chosen.forEach(function (name) {
-          const slot = document.createElement("div");
-          slot.className = "slot-reel";
-
-          const windowEl = document.createElement("div");
-          windowEl.className = "slot-window";
-
-          displayNames.forEach(function (optName) {
-            const item = document.createElement("div");
-            item.className = "slot-item";
-            item.textContent = optName;
-            windowEl.appendChild(item);
-          });
-
-          slot.appendChild(windowEl);
-          reelRow.appendChild(slot);
-
-          animateAccessoriesSlot(windowEl, displayNames, name);
-        });
-
-        slotsArea.appendChild(reelRow);
-
-        continueBtn.disabled = false;
-      },
-      config.palette.accent2
-    );
-
-    buttonsRow.appendChild(pickBtn);
-    buttonsRow.appendChild(continueBtn);
-
-    const footer = document.createElement("div");
-    footer.className = "card-footer";
-    const backBtn = createBackButton(function () {
-      showAccessoriesWheel(source);
-    });
-    footer.appendChild(backBtn);
-
-    card.appendChild(title);
-    card.appendChild(subtitle);
-    card.appendChild(list);
-    card.appendChild(slotsArea);
-    card.appendChild(buttonsRow);
-    card.appendChild(footer);
-
-    setView(card);
-  }
-
-  // ---------- Final summary ----------
-
-  function buildSummaryLabels() {
-    const labels = [];
-    if (appState.path) {
-      labels.push(appState.path);
-    }
-
-    if (appState.path === "P") {
-      if (appState.p.subChoice) labels.push(appState.p.subChoice);
-      if (appState.p.wheelResult) labels.push(appState.p.wheelResult);
-    } else if (appState.path === "FS") {
-      if (appState.fs.fsInitialOutcome)
-        labels.push(appState.fs.fsInitialOutcome);
-      if (appState.fs.shibStyle) labels.push(appState.fs.shibStyle);
-      if (appState.fs.corsetDetail) labels.push(appState.fs.corsetDetail);
-      if (appState.fs.tradCLChoice) labels.push(appState.fs.tradCLChoice);
-      if (appState.fs.fpFinal) {
-        const fp = appState.fs.fpFinal;
-        if (fp.cl) labels.push(fp.cl);
-        if (fp.jb) labels.push(fp.jb);
-        if (fp.other) labels.push(fp.other);
-      }
-      if (appState.fs.ffOutcome) labels.push(appState.fs.ffOutcome);
-      if (appState.fs.location) labels.push(appState.fs.location);
-
-      if (appState.fs.accessoriesWheel) {
-        let accLabel = appState.fs.accessoriesWheel;
-        if (accLabel === "Yes") accLabel = "Yes accessories";
-        if (accLabel === "No") accLabel = "No accessories";
-        labels.push(accLabel);
-      }
-
-      if (appState.fs.accessories && appState.fs.accessories.length) {
-        appState.fs.accessories.forEach(function (a) {
-          labels.push(a);
-        });
-      }
-    }
-
-    return labels;
-  }
-
-  function showFinalSummary() {
-    const card = document.createElement("div");
-    card.className = "card";
-
-    const title = document.createElement("h2");
-    title.textContent = "Summary";
-
-    const subtitle = document.createElement("p");
-    subtitle.className = "subtitle";
-    subtitle.textContent =
-      "Your run, as a set of result labels. Each tile represents an outcome along the path.";
-
-    card.appendChild(title);
-    card.appendChild(subtitle);
-
-    const labels = buildSummaryLabels();
-
-    const section = document.createElement("section");
-    section.className = "summary-section";
-
-    const grid = document.createElement("div");
-    grid.className = "summary-grid";
-
-    if (!labels.length) {
-      const empty = document.createElement("p");
-      empty.className = "summary-empty";
-      empty.textContent = "No results recorded.";
-      section.appendChild(empty);
-    } else {
-      const colours = [
-        config.palette.accent1,
-        config.palette.accent2,
-        config.palette.accent3,
-        config.palette.accent4,
-        config.palette.accent5,
-      ];
-
-      labels.forEach(function (label, index) {
-        const tile = document.createElement("div");
-        tile.className = "summary-tile";
-        const colour = colours[index % colours.length];
-        tile.style.background = colour;
-        tile.textContent = label;
-        grid.appendChild(tile);
-      });
-
-      section.appendChild(grid);
-    }
-
-    card.appendChild(section);
-
-    const footer = document.createElement("div");
-    footer.className = "card-footer";
-
-    const restartBtn = createButtonFromConfig(config.buttons.restart, function () {
-      appState = resetAppState();
-      showChoice1();
-    });
-
-    footer.appendChild(restartBtn);
-    card.appendChild(footer);
-
-    setView(card);
-  }
-
-  // ---------- Init ----------
-
-  function init() {
-    appState = resetAppState();
-    showChoice1();
-  }
-
-  // Call init immediately – script is loaded at the end of <body>,
-  // so the DOM is ready.
-  init();
-})();
+    creat
