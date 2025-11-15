@@ -164,4 +164,1287 @@
   }
 
   function setView(contentEl) {
-    const root = document.getEle
+    const root = document.getElementById("app");
+    if (!root) return;
+    root.innerHTML = "";
+    root.appendChild(contentEl);
+  }
+
+  // ---------- Overlay helper ----------
+
+  function showResultOverlay(text, callback) {
+    const overlay = document.createElement("div");
+    overlay.className = "result-overlay";
+
+    const box = document.createElement("div");
+    box.className = "result-box";
+    box.textContent = text;
+
+    overlay.appendChild(box);
+    document.body.appendChild(overlay);
+
+    setTimeout(function () {
+      overlay.classList.add("fade-out");
+      setTimeout(function () {
+        if (overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+        if (typeof callback === "function") {
+          callback();
+        }
+      }, 260);
+    }, 2000);
+  }
+
+  // ---------- Utility helpers ----------
+
+  function weightedRandomIndex(segments) {
+    const total = segments.reduce(function (sum, seg) {
+      let w = parseFloat(seg.weight);
+      if (isNaN(w) || w < 0) w = 0;
+      return sum + w;
+    }, 0);
+
+    if (total <= 0) {
+      return Math.floor(Math.random() * segments.length);
+    }
+
+    const r = Math.random() * total;
+    let acc = 0;
+    for (let i = 0; i < segments.length; i++) {
+      let w = parseFloat(segments[i].weight);
+      if (isNaN(w) || w < 0) w = 0;
+      acc += w;
+      if (r <= acc) return i;
+    }
+    return segments.length - 1;
+  }
+
+  function computeSegmentGeometry(segments) {
+    const fullCircle = Math.PI * 2;
+    const totalWeight = segments.reduce(function (sum, seg) {
+      let w = parseFloat(seg.weight);
+      if (isNaN(w) || w < 0) w = 0;
+      return sum + w;
+    }, 0);
+
+    const geom = [];
+    let currentAngle = -Math.PI / 2; // start at top
+
+    if (segments.length === 0) return geom;
+
+    if (totalWeight <= 0) {
+      const anglePer = fullCircle / segments.length;
+      segments.forEach(function () {
+        const start = currentAngle;
+        const end = start + anglePer;
+        const mid = (start + end) / 2;
+        geom.push({ startAngle: start, endAngle: end, midAngle: mid });
+        currentAngle = end;
+      });
+    } else {
+      segments.forEach(function (seg) {
+        let w = parseFloat(seg.weight);
+        if (isNaN(w) || w < 0) w = 0;
+        const angle = fullCircle * (w / totalWeight);
+        const start = currentAngle;
+        const end = start + angle;
+        const mid = start + angle / 2;
+        geom.push({ startAngle: start, endAngle: end, midAngle: mid });
+        currentAngle = end;
+      });
+    }
+    return geom;
+  }
+
+  function easeOutCubic(t) {
+    return 1 - Math.pow(1 - t, 3);
+  }
+
+  function lightenColor(hex, amount) {
+    if (!hex || hex[0] !== "#" || (hex.length !== 7 && hex.length !== 4)) {
+      return hex;
+    }
+    let r, g, b;
+    if (hex.length === 7) {
+      r = parseInt(hex.slice(1, 3), 16);
+      g = parseInt(hex.slice(3, 5), 16);
+      b = parseInt(hex.slice(5, 7), 16);
+    } else {
+      r = parseInt(hex[1] + hex[1], 16);
+      g = parseInt(hex[2] + hex[2], 16);
+      b = parseInt(hex[3] + hex[3], 16);
+    }
+    r = Math.min(255, Math.round(r + (255 - r) * amount));
+    g = Math.min(255, Math.round(g + (255 - g) * amount));
+    b = Math.min(255, Math.round(b + (255 - b) * amount));
+    const toHex = function (v) {
+      const s = v.toString(16);
+      return s.length === 1 ? "0" + s : s;
+    };
+    return "#" + toHex(r) + toHex(g) + toHex(b);
+  }
+
+  function animateAccessoriesSlot(windowEl, items, targetLabel) {
+    const children = windowEl.querySelectorAll(".slot-item");
+    if (!children.length) return;
+    const itemHeight = children[0].offsetHeight || 32;
+    let index = 0;
+    let steps = 0;
+    const maxSteps = 18 + Math.floor(Math.random() * 10);
+    let targetIndex = items.indexOf(targetLabel);
+    if (targetIndex === -1) targetIndex = 0;
+
+    function tick() {
+      steps += 1;
+      if (steps < maxSteps) {
+        index = (index + 1) % items.length;
+      } else {
+        index = targetIndex;
+      }
+      const offset = -index * itemHeight;
+      windowEl.style.transform = "translateY(" + offset + "px)";
+      if (steps < maxSteps + 4) {
+        setTimeout(tick, 90);
+      }
+    }
+
+    tick();
+  }
+
+  function pickRandomSubset(array, count) {
+    const copy = array.slice();
+    const result = [];
+    for (let i = 0; i < count && copy.length > 0; i++) {
+      const idx = Math.floor(Math.random() * copy.length);
+      result.push(copy[idx]);
+      copy.splice(idx, 1);
+    }
+    return result;
+  }
+
+  // Choose FP options randomly, enforcing CL/JB rules
+  function chooseRandomFPOptions(available, count) {
+    const chosen = [];
+    const chosenGroups = { CL: false, JB: false };
+    let hasCL96 = false;
+
+    for (let k = 0; k < count; k++) {
+      const pool = available.filter(function (opt) {
+        if (chosen.some((c) => c.id === opt.id)) return false;
+
+        if (opt.group === "CL" && chosenGroups.CL) return false;
+        if (opt.group === "JB" && chosenGroups.JB) return false;
+
+        if (hasCL96 && opt.group === "JB") return false;
+
+        return true;
+      });
+
+      if (!pool.length) break;
+
+      const idx = Math.floor(Math.random() * pool.length);
+      const pick = pool[idx];
+      chosen.push(pick);
+
+      if (pick.group === "CL") {
+        chosenGroups.CL = true;
+        if (pick.clType === "cl96") {
+          hasCL96 = true;
+        }
+      }
+      if (pick.group === "JB") {
+        chosenGroups.JB = true;
+      }
+    }
+
+    if (!chosen.length && available.length) {
+      chosen.push(available[0]);
+    }
+
+    return chosen;
+  }
+
+  // ---------- UI helpers ----------
+
+  function createButtonFromConfig(btnCfg, handler) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn";
+    btn.textContent = btnCfg.label;
+    if (btnCfg.color) {
+      btn.style.backgroundColor = btnCfg.color;
+    }
+    btn.addEventListener("click", handler);
+    return btn;
+  }
+
+  function createPrimaryButton(label, handler, colour) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn primary";
+    btn.textContent = label;
+    btn.style.backgroundColor = colour || config.palette.accent2;
+    btn.addEventListener("click", handler);
+    return btn;
+  }
+
+  function createBackButton(onBack) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-back";
+    btn.textContent = "Back";
+    btn.addEventListener("click", onBack);
+    return btn;
+  }
+
+  // ---------- Wheel component ----------
+
+  function createWheelComponent(parent, wheelCfg, options) {
+    options = options || {};
+    const spinLabel = options.spinLabel || "Spin";
+    const onResult =
+      typeof options.onResult === "function" ? options.onResult : function () {};
+    const showEditor = options.showEditor !== false;
+
+    const wrapper = document.createElement("div");
+    wrapper.className = "wheel-component";
+
+    const wheelTitle = document.createElement("h3");
+    wheelTitle.textContent = wheelCfg.title || "Wheel";
+
+    const wheelWrapper = document.createElement("div");
+    wheelWrapper.className = "wheel-wrapper";
+
+    const canvas = document.createElement("canvas");
+    canvas.className = "wheel-canvas";
+    canvas.width = 320;
+    canvas.height = 320;
+
+    const pointer = document.createElement("div");
+    pointer.className = "wheel-pointer";
+
+    wheelWrapper.appendChild(canvas);
+    wheelWrapper.appendChild(pointer);
+
+    const controls = document.createElement("div");
+    controls.className = "wheel-controls";
+
+    const segmentEditor = document.createElement("div");
+    segmentEditor.className = "segment-editor";
+
+    let segments = wheelCfg.segments.map(function (seg) {
+      return { key: seg.key, label: seg.label, weight: seg.weight };
+    });
+
+    const ctx = canvas.getContext("2d");
+    let rotation = 0;
+    let selectedIndex = null;
+    let isSpinning = false;
+
+    function drawWheel() {
+      const w = canvas.width;
+      const h = canvas.height;
+      ctx.clearRect(0, 0, w, h);
+
+      if (!segments.length) return;
+
+      const cx = w / 2;
+      const cy = h / 2;
+      const radius = Math.min(w, h) / 2 - 10;
+      const geom = computeSegmentGeometry(segments);
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rotation);
+
+      geom.forEach(function (g, index) {
+        const seg = segments[index];
+
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.arc(0, 0, radius, g.startAngle, g.endAngle);
+        ctx.closePath();
+
+        let fill = config.segmentColors[index % config.segmentColors.length];
+        if (selectedIndex !== null && index === selectedIndex && !isSpinning) {
+          fill = lightenColor(fill, 0.35);
+        }
+
+        ctx.fillStyle = fill;
+        ctx.fill();
+
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Label
+        ctx.save();
+        ctx.fillStyle = "#ffffff";
+        ctx.rotate(g.midAngle);
+        ctx.textAlign = "right";
+        ctx.font = "14px system-ui, sans-serif";
+        ctx.translate(radius - 12, 0);
+        ctx.rotate(Math.PI / 2);
+        ctx.fillText(seg.label, 0, 0);
+        ctx.restore();
+      });
+
+      ctx.restore();
+    }
+
+    drawWheel();
+
+    if (showEditor) {
+      const editorTitle = document.createElement("h4");
+      editorTitle.textContent = "Edit labels and weights";
+      segmentEditor.appendChild(editorTitle);
+
+      const grid = document.createElement("div");
+      grid.className = "segment-grid";
+
+      segments.forEach(function (seg, index) {
+        const row = document.createElement("div");
+        row.className = "segment-row";
+
+        const labelInput = document.createElement("input");
+        labelInput.type = "text";
+        labelInput.value = seg.label;
+        labelInput.placeholder = "Label";
+        labelInput.className = "segment-label-input";
+        labelInput.addEventListener("input", function (e) {
+          segments[index].label = e.target.value || "Option " + (index + 1);
+          drawWheel();
+        });
+
+        const weightInput = document.createElement("input");
+        weightInput.type = "number";
+        weightInput.min = "0";
+        weightInput.step = "1";
+        weightInput.value = seg.weight;
+        weightInput.title = "Weight";
+        weightInput.className = "segment-weight-input";
+        weightInput.addEventListener("input", function (e) {
+          let val = parseFloat(e.target.value);
+          if (isNaN(val) || val < 0) val = 0;
+          segments[index].weight = val;
+          drawWheel();
+        });
+
+        row.appendChild(labelInput);
+        row.appendChild(weightInput);
+        grid.appendChild(row);
+      });
+
+      segmentEditor.appendChild(grid);
+    }
+
+    const spinBtn = document.createElement("button");
+    spinBtn.type = "button";
+    spinBtn.className = "btn primary wheel-spin-btn";
+    spinBtn.textContent = spinLabel;
+    spinBtn.style.backgroundColor = config.palette.accent2;
+
+    const resultDiv = document.createElement("div");
+    resultDiv.className = "wheel-result";
+    resultDiv.textContent = "";
+
+    controls.appendChild(segmentEditor);
+    controls.appendChild(spinBtn);
+    controls.appendChild(resultDiv);
+
+    wrapper.appendChild(wheelTitle);
+    wrapper.appendChild(wheelWrapper);
+    wrapper.appendChild(controls);
+
+    parent.appendChild(wrapper);
+
+    spinBtn.addEventListener("click", function () {
+      if (isSpinning) return;
+      if (!segments.length) return;
+
+      isSpinning = true;
+      spinBtn.disabled = true;
+      selectedIndex = null;
+      rotation = 0;
+
+      const index = weightedRandomIndex(segments);
+      selectedIndex = index;
+
+      const geom = computeSegmentGeometry(segments);
+      const midAngle =
+        geom[index] && typeof geom[index].midAngle === "number"
+          ? geom[index].midAngle
+          : -Math.PI / 2;
+      const extraRotations = 4 + Math.random() * 2;
+      const targetAngleBase = -Math.PI / 2 - midAngle;
+      const finalRotation = extraRotations * Math.PI * 2 + targetAngleBase;
+
+      const startRotation = 0;
+      const duration = 4000;
+      const startTime = performance.now();
+
+      function animate(now) {
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / duration);
+        const eased = easeOutCubic(t);
+        rotation = startRotation + (finalRotation - startRotation) * eased;
+        drawWheel();
+        if (t < 1) {
+          requestAnimationFrame(animate);
+        } else {
+          isSpinning = false;
+          selectedIndex = index;
+          drawWheel();
+          const winningSegment = segments[index];
+          resultDiv.textContent = "Result: " + winningSegment.label;
+          const snapshot = segments.map(function (seg) {
+            return { key: seg.key, label: seg.label, weight: seg.weight };
+          });
+          onResult(winningSegment, snapshot);
+          spinBtn.disabled = false;
+        }
+      }
+
+      requestAnimationFrame(animate);
+    });
+  }
+
+  // ---------- FP random picker (slot-style, like accessories) ----------
+
+  function renderFPRandomPicker(parent, onResolved) {
+    const container = document.createElement("div");
+    container.className = "fp-card";
+
+    const title = document.createElement("h3");
+    title.textContent = "FP picker";
+
+    const helper = document.createElement("p");
+    helper.className = "helper-text";
+    if (appState.fs.tradCLChoice === "No CL") {
+      helper.textContent =
+        "CL is set to No CL, so only non-CL FP options are eligible.";
+    } else {
+      helper.textContent =
+        "Randomly selects FP options with at most one CL and one JB; CL-96 blocks JB.";
+    }
+
+    const optionsStatic = document.createElement("div");
+    optionsStatic.className = "fp-options-static";
+
+    const noCL = appState.fs.tradCLChoice === "No CL";
+    const availableOptions = config.fpOptions.filter(function (opt) {
+      return !(noCL && opt.group === "CL");
+    });
+
+    availableOptions.forEach(function (opt) {
+      const chip = document.createElement("span");
+      chip.className = "fp-chip";
+      chip.textContent = opt.label;
+      optionsStatic.appendChild(chip);
+    });
+
+    const slotArea = document.createElement("div");
+    slotArea.className = "slot-area";
+
+    let animating = false;
+
+    function doRandomise() {
+      if (animating) return;
+      animating = true;
+      slotArea.innerHTML = "";
+
+      const count = Math.random() < 0.5 ? 1 : 2;
+      const chosenOptions = chooseRandomFPOptions(availableOptions, count);
+      const chosenLabels = chosenOptions.map(function (o) {
+        return o.label;
+      });
+      appState.fs.fpFinal = chosenLabels;
+
+      const reelRow = document.createElement("div");
+      reelRow.className = "accessory-reels";
+
+      const displayNames = availableOptions.map(function (o) {
+        return o.label;
+      });
+
+      chosenLabels.forEach(function (name) {
+        const slot = document.createElement("div");
+        slot.className = "slot-reel small";
+
+        const windowEl = document.createElement("div");
+        windowEl.className = "slot-window";
+
+        displayNames.forEach(function (optName) {
+          const item = document.createElement("div");
+          item.className = "slot-item";
+          item.textContent = optName;
+          windowEl.appendChild(item);
+        });
+
+        slot.appendChild(windowEl);
+        reelRow.appendChild(slot);
+
+        animateAccessoriesSlot(windowEl, displayNames, name);
+      });
+
+      slotArea.appendChild(reelRow);
+
+      const summary = document.createElement("p");
+      summary.className = "helper-text";
+      summary.textContent = "FP result: " + chosenLabels.join(", ");
+      slotArea.appendChild(summary);
+
+      if (typeof onResolved === "function") {
+        onResolved();
+      }
+
+      setTimeout(function () {
+        animating = false;
+      }, 1000);
+    }
+
+    const randomiseBtn = createPrimaryButton(
+      "Randomise FP",
+      doRandomise,
+      config.palette.accent3
+    );
+
+    container.appendChild(title);
+    container.appendChild(helper);
+    container.appendChild(optionsStatic);
+    container.appendChild(randomiseBtn);
+    container.appendChild(slotArea);
+
+    parent.appendChild(container);
+  }
+
+  // ---------- Flow: initial choice ----------
+
+  function showChoice1() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "Step 1: Choose path";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Select P or FS to start. Everything else branches from here.";
+
+    const buttonsRow = document.createElement("div");
+    buttonsRow.className = "button-row";
+
+    config.buttons.choice1.forEach(function (btnCfg) {
+      const btn = createButtonFromConfig(btnCfg, function () {
+        appState.path = btnCfg.id;
+        if (btnCfg.id === "P") {
+          appState.p.subChoice = null;
+          appState.p.wheelResult = null;
+          showPSubChoice();
+        } else {
+          showFSInitialWheel();
+        }
+      });
+      buttonsRow.appendChild(btn);
+    });
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+    card.appendChild(buttonsRow);
+
+    setView(card);
+  }
+
+  // ---------- P branch ----------
+
+  function showPSubChoice() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "P branch – choose S or D";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Choose between S and D to move to the corresponding P wheel.";
+
+    const buttonsRow = document.createElement("div");
+    buttonsRow.className = "button-row";
+
+    config.buttons.pSubChoice.forEach(function (btnCfg) {
+      const btn = createButtonFromConfig(btnCfg, function () {
+        appState.p.subChoice = btnCfg.id;
+        appState.p.wheelResult = null;
+        if (btnCfg.id === "S") {
+          showPSWheel();
+        } else {
+          showPDWheel();
+        }
+      });
+      buttonsRow.appendChild(btn);
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+
+    const backBtn = createBackButton(function () {
+      appState = resetAppState();
+      showChoice1();
+    });
+
+    footer.appendChild(backBtn);
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+    card.appendChild(buttonsRow);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showPSWheel() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "P branch – S path";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Spin to choose between JB, NHJ, TW and FL. Segment sizes match weights.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    createWheelComponent(card, config.wheels.pS, {
+      spinLabel: "Spin S wheel",
+      onResult: function (segment) {
+        appState.p.wheelResult = segment.label;
+        showResultOverlay(segment.label, function () {
+          showFinalSummary();
+        });
+      },
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const backBtn = createBackButton(showPSubChoice);
+    footer.appendChild(backBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showPDWheel() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "P branch – D path";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Spin to choose between Oil+HE and No oil FP. Segment sizes reflect the weights.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    createWheelComponent(card, config.wheels.pD, {
+      spinLabel: "Spin D wheel",
+      onResult: function (segment) {
+        appState.p.wheelResult = segment.label;
+        showResultOverlay(segment.label, function () {
+          showFinalSummary();
+        });
+      },
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const backBtn = createBackButton(showPSubChoice);
+    footer.appendChild(backBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  // ---------- FS branch ----------
+
+  function showFSInitialWheel() {
+    // Reset FS branch state whenever we revisit the initial FS wheel
+    appState.fs = {
+      fsInitialOutcome: null,
+      fsInitialKey: null,
+      shibStyle: null,
+      corsetDetail: null,
+      tradCLChoice: null,
+      fpFinal: [],
+      ffOutcome: null,
+      location: null,
+      accessoriesWheel: null,
+      accessories: [],
+    };
+
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS branch – initial wheel";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Spin to go to Shib, outfit+delay, Oil or Trad. Segment proportions follow the weights.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    createWheelComponent(card, config.wheels.fsInitial, {
+      spinLabel: "Spin FS wheel",
+      onResult: function (segment) {
+        appState.fs.fsInitialOutcome = segment.label;
+        appState.fs.fsInitialKey = segment.key;
+        showResultOverlay(segment.label, function () {
+          if (segment.key === "shib") {
+            showShibSubWheel();
+          } else if (segment.key === "trad") {
+            showTradCLChoice();
+          } else {
+            // outfit+delay or Oil
+            showLocationWheel("fsInitial");
+          }
+        });
+      },
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const backBtn = createBackButton(function () {
+      appState = resetAppState();
+      showChoice1();
+    });
+    footer.appendChild(backBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showShibSubWheel() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS branch – Shib sub-wheel";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent = "Spin to choose between Corset and Restrained.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    createWheelComponent(card, config.wheels.shibStyle, {
+      spinLabel: "Spin Shib wheel",
+      onResult: function (segment) {
+        appState.fs.shibStyle = segment.label;
+        showResultOverlay(segment.label, function () {
+          if (segment.key === "corset") {
+            showCorsetDetailWheel();
+          } else {
+            showLocationWheel("shib");
+          }
+        });
+      },
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const backBtn = createBackButton(showFSInitialWheel);
+    footer.appendChild(backBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showCorsetDetailWheel() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS branch – Corset detail";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Spin to decide between Sense-dep and BSC, then proceed to the FS terminus.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    createWheelComponent(card, config.wheels.corsetDetail, {
+      spinLabel: "Spin Sense-dep / BSC",
+      onResult: function (segment) {
+        appState.fs.corsetDetail = segment.label;
+        showResultOverlay(segment.label, function () {
+          showLocationWheel("shib");
+        });
+      },
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const backBtn = createBackButton(showShibSubWheel);
+    footer.appendChild(backBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showTradCLChoice() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS branch – Trad: CL or No CL";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Choose whether CL options are allowed when FP is randomised.";
+
+    const buttonsRow = document.createElement("div");
+    buttonsRow.className = "button-row";
+
+    config.buttons.tradCL.forEach(function (btnCfg) {
+      const btn = createButtonFromConfig(btnCfg, function () {
+        appState.fs.tradCLChoice = btnCfg.id === "NoCL" ? "No CL" : "CL";
+        appState.fs.fpFinal = [];
+        appState.fs.ffOutcome = null;
+        showFPAndFFBSC();
+      });
+      buttonsRow.appendChild(btn);
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const backBtn = createBackButton(showFSInitialWheel);
+    footer.appendChild(backBtn);
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+    card.appendChild(buttonsRow);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showFPAndFFBSC() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS branch – FP and F-F / BSC";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Randomise FP (slot-style) and spin the F-F / BSC wheel. When both are ready, continue to the FS terminus.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    const layout = document.createElement("div");
+    layout.className = "dual-layout";
+
+    const fpPanel = document.createElement("div");
+    fpPanel.className = "panel fp-panel";
+
+    const wheelPanel = document.createElement("div");
+    wheelPanel.className = "panel wheel-panel";
+
+    layout.appendChild(fpPanel);
+    layout.appendChild(wheelPanel);
+    card.appendChild(layout);
+
+    let fpReady = appState.fs.fpFinal.length > 0;
+    let ffReady = !!appState.fs.ffOutcome;
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+
+    const backBtn = createBackButton(showTradCLChoice);
+
+    const continueBtn = createPrimaryButton(
+      "Continue to location",
+      function () {
+        const parts = [];
+        if (appState.fs.fpFinal.length) {
+          parts.push(appState.fs.fpFinal.join(", "));
+        }
+        if (appState.fs.ffOutcome) {
+          parts.push(appState.fs.ffOutcome);
+        }
+        const overlayText = parts.length ? parts.join(" • ") : "Next";
+        showResultOverlay(overlayText, function () {
+          showLocationWheel("fp");
+        });
+      },
+      config.palette.accent1
+    );
+    continueBtn.disabled = !(fpReady && ffReady);
+
+    footer.appendChild(backBtn);
+    footer.appendChild(continueBtn);
+    card.appendChild(footer);
+
+    function updateContinueState() {
+      continueBtn.disabled = !(fpReady && ffReady);
+    }
+
+    renderFPRandomPicker(fpPanel, function () {
+      fpReady = appState.fs.fpFinal.length > 0;
+      updateContinueState();
+    });
+
+    createWheelComponent(wheelPanel, config.wheels.ffBsc, {
+      spinLabel: "Spin F-F / BSC",
+      onResult: function (segment) {
+        appState.fs.ffOutcome = segment.label;
+        // No page change here – we only move when the user hits Continue
+        updateContinueState();
+      },
+    });
+
+    setView(card);
+  }
+
+  // ---------- FS terminus ----------
+
+  function showLocationWheel(source) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS terminus – location";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent = "Spin to decide the location.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    createWheelComponent(card, config.wheels.location, {
+      spinLabel: "Spin location",
+      onResult: function (segment) {
+        appState.fs.location = segment.label;
+        showResultOverlay(segment.label, function () {
+          showAccessoriesWheel(source);
+        });
+      },
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+
+    const backBtn = createBackButton(function () {
+      if (!source || source === "fsInitial") {
+        showFSInitialWheel();
+      } else if (source === "shib") {
+        // Back to Shib branch entry
+        if (appState.fs.shibStyle) {
+          showShibSubWheel();
+        } else {
+          showFSInitialWheel();
+        }
+      } else if (source === "fp") {
+        showFPAndFFBSC();
+      } else {
+        showFSInitialWheel();
+      }
+    });
+
+    footer.appendChild(backBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showAccessoriesWheel(source) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS terminus – accessories wheel";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Spin to see whether accessories are involved. If yes, you’ll move on to a picker.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    createWheelComponent(card, config.wheels.accessoriesYN, {
+      spinLabel: "Spin accessories",
+      onResult: function (segment) {
+        appState.fs.accessoriesWheel = segment.label;
+        let label = segment.label;
+        if (label === "Yes") label = "Yes accessories";
+        if (label === "No") label = "No accessories";
+        showResultOverlay(label, function () {
+          if (segment.key === "yes") {
+            showAccessoriesPicker(source);
+          } else {
+            appState.fs.accessories = [];
+            showFinalSummary();
+          }
+        });
+      },
+    });
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+
+    const backBtn = createBackButton(function () {
+      showLocationWheel(source);
+    });
+
+    footer.appendChild(backBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  function showAccessoriesPicker(source) {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "FS terminus – accessories picker";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Click to let the reels pick either one or two accessories at random, then continue to the summary.";
+
+    const list = document.createElement("div");
+    list.className = "accessory-list";
+
+    config.accessoriesOptions.forEach(function (name) {
+      const item = document.createElement("div");
+      item.className = "accessory-chip";
+      item.textContent = name;
+      list.appendChild(item);
+    });
+
+    const slotsArea = document.createElement("div");
+    slotsArea.className = "slot-area accessory-slots";
+
+    const buttonsRow = document.createElement("div");
+    buttonsRow.className = "button-row";
+
+    const continueBtn = createPrimaryButton(
+      "Finish and see summary",
+      function () {
+        const label =
+          appState.fs.accessories && appState.fs.accessories.length
+            ? appState.fs.accessories.join(", ")
+            : "No accessories";
+        showResultOverlay(label, function () {
+          showFinalSummary();
+        });
+      },
+      config.palette.accent1
+    );
+    continueBtn.disabled = true;
+
+    const pickBtn = createPrimaryButton(
+      "Pick accessories",
+      function () {
+        const count = Math.random() < 0.5 ? 1 : 2;
+        const chosen = pickRandomSubset(config.accessoriesOptions, count);
+        appState.fs.accessories = chosen.slice();
+
+        slotsArea.innerHTML = "";
+
+        const reelRow = document.createElement("div");
+        reelRow.className = "accessory-reels";
+
+        const displayNames = config.accessoriesOptions.slice();
+
+        chosen.forEach(function (name) {
+          const slot = document.createElement("div");
+          slot.className = "slot-reel";
+
+          const windowEl = document.createElement("div");
+          windowEl.className = "slot-window";
+
+          displayNames.forEach(function (optName) {
+            const item = document.createElement("div");
+            item.className = "slot-item";
+            item.textContent = optName;
+            windowEl.appendChild(item);
+          });
+
+          slot.appendChild(windowEl);
+          reelRow.appendChild(slot);
+
+          animateAccessoriesSlot(windowEl, displayNames, name);
+        });
+
+        slotsArea.appendChild(reelRow);
+
+        const summary = document.createElement("p");
+        summary.className = "helper-text";
+        summary.textContent = "Accessories chosen: " + chosen.join(", ");
+        slotsArea.appendChild(summary);
+
+        continueBtn.disabled = false;
+      },
+      config.palette.accent2
+    );
+
+    buttonsRow.appendChild(pickBtn);
+    buttonsRow.appendChild(continueBtn);
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+    const backBtn = createBackButton(function () {
+      showAccessoriesWheel(source);
+    });
+    footer.appendChild(backBtn);
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+    card.appendChild(list);
+    card.appendChild(slotsArea);
+    card.appendChild(buttonsRow);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  // ---------- Final summary ----------
+
+  function buildSummaryLabels() {
+    const labels = [];
+    if (appState.path) {
+      labels.push(appState.path);
+    }
+
+    if (appState.path === "P") {
+      if (appState.p.subChoice) labels.push(appState.p.subChoice);
+      if (appState.p.wheelResult) labels.push(appState.p.wheelResult);
+    } else if (appState.path === "FS") {
+      if (appState.fs.fsInitialOutcome)
+        labels.push(appState.fs.fsInitialOutcome);
+      if (appState.fs.shibStyle) labels.push(appState.fs.shibStyle);
+      if (appState.fs.corsetDetail) labels.push(appState.fs.corsetDetail);
+      if (appState.fs.tradCLChoice) labels.push(appState.fs.tradCLChoice);
+      if (appState.fs.fpFinal && appState.fs.fpFinal.length) {
+        appState.fs.fpFinal.forEach(function (l) {
+          labels.push(l);
+        });
+      }
+      if (appState.fs.ffOutcome) labels.push(appState.fs.ffOutcome);
+      if (appState.fs.location) labels.push(appState.fs.location);
+
+      if (appState.fs.accessoriesWheel) {
+        let accLabel = appState.fs.accessoriesWheel;
+        if (accLabel === "Yes") accLabel = "Yes accessories";
+        if (accLabel === "No") accLabel = "No accessories";
+        labels.push(accLabel);
+      }
+
+      if (appState.fs.accessories && appState.fs.accessories.length) {
+        appState.fs.accessories.forEach(function (a) {
+          labels.push(a);
+        });
+      }
+    }
+
+    return labels;
+  }
+
+  function showFinalSummary() {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const title = document.createElement("h2");
+    title.textContent = "Summary";
+
+    const subtitle = document.createElement("p");
+    subtitle.className = "subtitle";
+    subtitle.textContent =
+      "Your run, as a set of result labels. Each tile represents an outcome along the path.";
+
+    card.appendChild(title);
+    card.appendChild(subtitle);
+
+    const labels = buildSummaryLabels();
+
+    const section = document.createElement("section");
+    section.className = "summary-section";
+
+    const grid = document.createElement("div");
+    grid.className = "summary-grid";
+
+    if (!labels.length) {
+      const empty = document.createElement("p");
+      empty.className = "summary-empty";
+      empty.textContent = "No results recorded.";
+      section.appendChild(empty);
+    } else {
+      const colours = [
+        config.palette.accent1,
+        config.palette.accent2,
+        config.palette.accent3,
+        config.palette.accent4,
+        config.palette.accent5,
+      ];
+
+      labels.forEach(function (label, index) {
+        const tile = document.createElement("div");
+        tile.className = "summary-tile";
+        const colour = colours[index % colours.length];
+        tile.style.background = colour;
+        tile.textContent = label;
+        grid.appendChild(tile);
+      });
+
+      section.appendChild(grid);
+    }
+
+    card.appendChild(section);
+
+    const footer = document.createElement("div");
+    footer.className = "card-footer";
+
+    const restartBtn = createButtonFromConfig(config.buttons.restart, function () {
+      appState = resetAppState();
+      showChoice1();
+    });
+
+    footer.appendChild(restartBtn);
+    card.appendChild(footer);
+
+    setView(card);
+  }
+
+  // ---------- Init ----------
+
+  function init() {
+    appState = resetAppState();
+    showChoice1();
+  }
+
+  // Call init immediately – script is loaded at the end of <body>,
+  // so the DOM is ready.
+  init();
+})();
